@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>影子配對</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{ --sound-safe:64px; }
+*{ box-sizing:border-box }
+body{
+  margin:0; min-height:100vh;
+  font-family:'Noto Sans TC',sans-serif;
+  background:linear-gradient(135deg,#fef9f3,#e6f6f9);
+  color:#3d2b13; display:flex; flex-direction:column; align-items:center;
+}
+
+/* Header */
+header{
+  width:min(1200px,100%);
+  display:flex; align-items:center; justify-content:space-between;
+  padding:14px 16px; padding-right:calc(16px + var(--sound-safe));
+  gap:12px;
+}
+.title-wrap{ display:flex; flex-direction:column; gap:4px }
+h1{ margin:0; font-size:28px }
+.sub{ margin:0; color:#7a6d62; font-size:14px }
+.stats{ display:flex; gap:10px; flex-wrap:wrap }
+.stats div{ background:#fff; border-radius:8px; padding:6px 10px; box-shadow:0 2px 6px rgba(0,0,0,.08); font-size:14px }
+.actions{ display:flex; gap:8px; flex-wrap:wrap }
+button{
+  appearance:none; border:none; border-radius:8px; padding:8px 14px;
+  font-size:15px; font-weight:700; cursor:pointer; color:#fff;
+  background:#ff9900; box-shadow:0 4px 10px rgba(0,0,0,.12);
+  transition:transform .15s ease, box-shadow .15s ease;
+}
+button:hover{ transform:translateY(-1px); box-shadow:0 6px 14px rgba(0,0,0,.16) }
+.btn-ghost{ background:#ffffff; color:#3d2b13; border:1px solid #e5d6b7 }
+
+/* Grid area */
+.stage-wrap{
+  flex:1; width:min(1200px,100%);
+  display:flex; align-items:center; justify-content:center;
+  padding:12px 16px; padding-right:calc(16px + var(--sound-safe));
+}
+.grid{ display:grid; gap:12px; width:100%; max-width:940px; max-height:78vh; }
+
+/* Cards */
+.card{
+  aspect-ratio:1/1; position:relative; border-radius:12px; cursor:pointer;
+  background:#ffd966; box-shadow:0 4px 12px rgba(0,0,0,.12);
+  transform-style:preserve-3d; transition:transform .35s;
+}
+.card.flip{ transform:rotateY(180deg) }
+.card .front,.card .back{
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  backface-visibility:hidden; border-radius:12px;
+}
+.card .front{
+  background:#ffd966;
+  background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.25) 0 10px,transparent 10px 20px);
+  font-weight:700; font-size:22px; color:#a06a00;
+}
+.card .back{ transform:rotateY(180deg); background:#fff }
+.card .back img{ max-width:90%; max-height:90%; object-fit:contain }
+
+/* Toast / Auto-advance banner */
+.toast{
+  position:fixed; left:50%; top:12px; transform:translateX(-50%);
+  background:#fff; color:#3d2b13; border-radius:12px;
+  padding:10px 14px; box-shadow:0 6px 16px rgba(0,0,0,.18);
+  opacity:0; pointer-events:none; transition:opacity .25s, transform .25s; z-index:30;
+}
+.toast.show{ opacity:1; transform:translateX(-50%) translateY(0) }
+
+/* Final overlay (only after Level 3) */
+.overlay{ position:fixed; inset:0; background:rgba(0,0,0,.35);
+  display:none; align-items:center; justify-content:center; padding:16px; z-index:20; }
+.overlay.show{ display:flex }
+.panel{ background:#fff; border-radius:16px; padding:18px 20px; width:min(520px,90%);
+  box-shadow:0 12px 28px rgba(0,0,0,.25); text-align:center }
+.panel h2{ margin:0 0 10px }
+.panel .row{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:10px }
+
+@media (max-width:640px){
+  .grid{ gap:10px; max-height:70vh }
+  .actions button{ font-size:14px; padding:8px 12px }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="title-wrap">
+    <h1>影子配對</h1>
+    <p class="sub">翻出彩色動物與它的影子各一張，配對成功！</p>
+  </div>
+  <div class="stats">
+    <div>關卡：<span id="lv">1</span>/3</div>
+    <div>翻卡：<span id="flips">0</span></div>
+    <div>完成：<span id="matches">0</span>/<span id="totalPairs">0</span></div>
+    <div>提示剩餘：<span id="hints">0</span></div>
+  </div>
+  <div class="actions">
+    <button id="hintBtn">提示</button>
+    <button id="restartBtn" class="btn-ghost">重新開始</button>
+    <button id="backBtn" class="btn-ghost">回到目錄</button>
+  </div>
+</header>
+
+<div class="stage-wrap">
+  <div class="grid" id="grid"></div>
+</div>
+
+<!-- 最終結束（全破） -->
+<div id="finalOverlay" class="overlay">
+  <div class="panel">
+    <h2>全破關！</h2>
+    <p>你完成所有影子配對關卡！</p>
+    <div class="row">
+      <button id="againBtn">再玩一次</button>
+      <button id="menuBtn" class="btn-ghost">回到目錄</button>
+      <button id="nextGameBtn">下一個遊戲</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+/* 檔名：
+   彩色：images/shadow/<animal>.png
+   影子：images/shadow/<animal>-shadow.png
+*/
+const ALL = [
+  "ant","bear","bird","cat-mother","cat","deer","elephant","fox",
+  "giraffe","lion","rabbit","rhino","squirrel","turtle"
+];
+// 三關：6張牌(3對)、8張牌(4對)、10張牌(5對)
+const LEVELS = [{pairs:3},{pairs:4},{pairs:5}];
+
+let levelIndex = 0;
+let cards = [];
+let flippedIdx = [];
+let lock = false;
+let flips = 0, matches = 0, hints = 0;
+
+const el = {
+  grid: document.getElementById('grid'),
+  lv: document.getElementById('lv'),
+  flips: document.getElementById('flips'),
+  matches: document.getElementById('matches'),
+  totalPairs: document.getElementById('totalPairs'),
+  hints: document.getElementById('hints'),
+  hintBtn: document.getElementById('hintBtn'),
+  restartBtn: document.getElementById('restartBtn'),
+  backBtn: document.getElementById('backBtn'),
+  final: document.getElementById('finalOverlay'),
+  againBtn: document.getElementById('againBtn'),
+  menuBtn: document.getElementById('menuBtn'),
+  toast: document.getElementById('toast'),
+  nextBtn: document.getElementById('nextGameBtn')
+};
+
+function shuffle(a){ return a.map(x=>[Math.random(),x]).sort((p,q)=>p[0]-q[0]).map(x=>x[1]); }
+function bestCols(n){ let c=Math.ceil(Math.sqrt(n)); while(n%c) c++; return Math.min(c,5); }
+function showToast(text, ms=1400){
+  el.toast.textContent = text;
+  el.toast.classList.add('show');
+  setTimeout(()=> el.toast.classList.remove('show'), ms);
+}
+
+function initGame(restartSameLevel=false){
+  if (!restartSameLevel) levelIndex = Math.max(0, Math.min(levelIndex, LEVELS.length-1));
+  const { pairs } = LEVELS[levelIndex];
+  const pick = shuffle(ALL).slice(0, pairs);
+  const pool = pick.flatMap(n => [`${n}.png`, `${n}-shadow.png`]);
+  cards = shuffle(pool).map(src => ({ src, matched:false }));
+  flippedIdx = []; lock=false; flips=0; matches=0;
+  hints = Math.max(6, pairs*2);
+
+  // header
+  el.lv.textContent = String(levelIndex+1);
+  el.flips.textContent = '0';
+  el.matches.textContent = '0';
+  el.totalPairs.textContent = String(pairs);
+  el.hints.textContent = String(hints);
+
+  // grid
+  const n = cards.length, cols = bestCols(n);
+  el.grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  el.grid.innerHTML = '';
+  cards.forEach((c,i)=>{
+    const d = document.createElement('div');
+    d.className = 'card'; d.dataset.index = i;
+    d.innerHTML = `
+      <div class="front">★</div>
+      <div class="back"><img src="images/shadow/${c.src}" alt=""></div>
+    `;
+    d.addEventListener('click', ()=>flip(i,d));
+    el.grid.appendChild(d);
+  });
+
+  el.final.classList.remove('show');
+  showToast(`第 ${levelIndex+1} 關開始！`, 1200);
+}
+
+function flip(i, node){
+  if (lock) return;
+  const c = cards[i];
+  if (c.matched || flippedIdx.includes(i)) return;
+
+  node.classList.add('flip');
+  flippedIdx.push(i);
+
+  if (flippedIdx.length === 2){
+    lock = true; flips++; el.flips.textContent = String(flips);
+    const [a,b] = flippedIdx.map(x=>cards[x]);
+    if (isPair(a.src,b.src)){
+      a.matched = b.matched = true;
+      matches++; el.matches.textContent = String(matches);
+      flippedIdx = []; lock = false;
+      if (matches === cards.length/2) setTimeout(onLevelClear, 320);
+    }else{
+      setTimeout(()=>{
+        flippedIdx.forEach(idx=>{
+          const e = document.querySelector(`.card[data-index="${idx}"]`);
+          e && e.classList.remove('flip');
+        });
+        flippedIdx = []; lock=false;
+      }, 900);
+    }
+  }
+}
+
+function isPair(x,y){
+  const nx = x.replace('-shadow.png','').replace('.png','');
+  const ny = y.replace('-shadow.png','').replace('.png','');
+  return nx===ny && x!==y;
+}
+
+function hint(){
+  if (lock || hints<=0) return;
+  hints--; el.hints.textContent = String(hints);
+  const openable = cards.map((c,i)=>c.matched?null:i).filter(i=>i!==null);
+  const sample = shuffle(openable).slice(0, Math.min( Math.ceil(cards.length/4), openable.length ));
+  sample.forEach(i => document.querySelector(`.card[data-index="${i}"]`).classList.add('flip'));
+  setTimeout(()=>{
+    sample.forEach(i=>{
+      if (!cards[i].matched) document.querySelector(`.card[data-index="${i}"]`).classList.remove('flip');
+    });
+  }, 1800);
+}
+
+function onLevelClear(){
+  const last = (levelIndex >= LEVELS.length-1);
+  if (last){
+    el.final.classList.add('show');
+    showToast('全部完成！', 1200);
+  }else{
+    showToast(`第 ${levelIndex+1} 關完成，準備第 ${levelIndex+2} 關…`, 1400);
+    setTimeout(()=>{ levelIndex++; initGame(); }, 1500);
+  }
+}
+
+/* Buttons */
+el.hintBtn.addEventListener('click', hint);
+el.restartBtn.addEventListener('click', ()=> initGame(true));
+el.backBtn.addEventListener('click', ()=> {
+  if (window.parent && window.parent !== window){
+    parent.postMessage({ type:'nav', page:'games-menu.html' }, '*');
+  } else {
+    location.href = 'games-menu.html';
+  }
+});
+el.againBtn.addEventListener('click', ()=> { levelIndex=0; initGame(); });
+el.menuBtn.addEventListener('click', ()=> {
+  if (window.parent && window.parent !== window){
+    parent.postMessage({ type:'nav', page:'games-menu.html' }, '*');
+  } else {
+    location.href = 'games-menu.html';
+  }
+});
+
+// 下一個遊戲：move-the-sun.html
+const _qs = new URLSearchParams(location.search);
+const _buddy = _qs.get('buddy');
+const _sprite = _qs.get('sprite');
+
+function goNextGame(){
+  const page = 'move-the-sun.html';
+  const params = {};
+  if (_buddy) params.buddy = _buddy;
+  if (_sprite) params.sprite = _sprite;
+
+  if (window.parent && window.parent !== window){
+    parent.postMessage({ type:'nav', page, params }, '*');
+  } else {
+    const q = new URLSearchParams(params);
+    location.href = `${page}${q.toString() ? `?${q}` : ''}`;
+  }
+}
+
+if (el.nextBtn){
+  el.nextBtn.addEventListener('click', goNextGame);
+}
+
+initGame();
+
+// 告訴 app-shell：這頁用主題曲
+try{ if (window.parent && window.parent !== window){ parent.postMessage({type:'setTrack', track:'main'}, '*'); } }catch(e){}
+</script>
+</body>
+</html>

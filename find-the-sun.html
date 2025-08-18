@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>尋找太陽 Find the Sun</title>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{ --brand:#f39c12; --ink:#5d4037; --bg-a:#fff3e0; --bg-b:#e0f7fa; --card:#ffffff; --shadow:rgba(0,0,0,.1); }
+  *{box-sizing:border-box}
+  body{
+    font-family:'Baloo 2', cursive;
+    background:linear-gradient(to right,var(--bg-a),var(--bg-b));
+    color:var(--ink); margin:16px;
+    display:flex; flex-direction:column; align-items:center;
+  }
+  header{display:flex; gap:12px; align-items:center; justify-content:space-between; width:min(980px,100%)}
+  h1{margin:8px 0 12px}
+  .btn{appearance:none;border:none;border-radius:12px;background:var(--brand);color:#fff; padding:10px 18px; cursor:pointer; box-shadow:0 3px 8px rgba(243,156,18,.55); font-size:1rem}
+  .btn:hover{background:#e67e22}
+
+  .hud{display:flex; gap:12px; align-items:center; flex-wrap:wrap}
+  .stat{background:var(--card); box-shadow:0 2px 6px var(--shadow); border-radius:12px; padding:8px 12px}
+
+  .stage-wrap{width:min(980px,100%);}
+  .stage{
+    position:relative; width:100%; aspect-ratio:16/9; background:#0e2233;
+    border-radius:20px; box-shadow:0 4px 10px rgba(0,0,0,.15);
+    overflow:hidden; user-select:none; touch-action:none;
+  }
+  .bg{ position:absolute; inset:0; background-size:cover; background-position:center; }
+
+  /* 轉場薄幕：重佈局時短暫覆蓋避免任何閃現 */
+  .curtain{
+    position:absolute; inset:0; background:#0b121c;
+    opacity:0; pointer-events:none; transition:opacity .12s ease;
+    z-index:5;
+  }
+  .curtain.show{ opacity:1; }
+
+  /* 太陽（純 CSS） */
+  .sun{
+    position:absolute; width:90px; height:90px; transform:translate(-50%,-50%);
+    opacity:0; transition:opacity .25s ease; border-radius:50%;
+    background: radial-gradient(35% 35% at 35% 35%, #fff8b5, #ffe082 45%, #fbc02d 70%, #f39c12 100%);
+    box-shadow:0 0 0 0 rgba(243,156,18,0);
+    z-index:1;
+  }
+  .sun.glow{
+    box-shadow:0 0 10px rgba(243,156,18,.7), 0 0 20px rgba(243,156,18,.5), 0 0 36px rgba(243,156,18,.35);
+  }
+  /* 重佈局時完全隱蔽（雙保險） */
+  .sun.cloak{ opacity:0 !important; transition:none !important; }
+  .sun.hidden{ visibility:hidden; pointer-events:none; }
+
+  /* 雲（純 CSS，可拖移；乾淨藍灰雙色漸層） */
+  .cover{ position:absolute; transform:translate(-50%, -50%); cursor:grab; z-index:2; }
+  .cover.dragging{ cursor:grabbing }
+  .cloud{
+    width:160px; height:70px; border-radius:40px;
+    background: linear-gradient(180deg, var(--cloud-top,#aebacc) 0%, var(--cloud-bottom,#97a6b8) 100%);
+    box-shadow: var(--cloud-shadow, 0 10px 20px rgba(0,0,0,.28));
+  }
+  .cloud::before, .cloud::after{
+    content:""; position:absolute; border-radius:50%;
+    background: linear-gradient(180deg, var(--cloud-top,#aebacc) 0%, var(--cloud-bottom,#97a6b8) 100%);
+  }
+  .cloud::before{ width:80px; height:80px; left:22px; top:-26px; }
+  .cloud::after { width:60px; height:60px; right:18px; top:-18px; }
+  .cloud.c2{ width:190px; height:78px; }
+  .cloud.c2::before{ width:92px; height:92px; left:28px; top:-30px; }
+  .cloud.c2::after { width:70px; height:70px; right:20px; top:-22px; }
+  .cloud.c3{ width:140px; height:62px; }
+  .cloud.c3::before{ width:70px; height:70px; left:18px; top:-22px; }
+  .cloud.c3::after { width:52px; height:52px; right:16px; top:-18px; }
+
+  /* 左下角夥伴（由上一頁帶入） */
+  .buddy{ position:absolute; left:14px; bottom:14px; width:90px; height:auto; transform-origin:bottom left; display:none }
+  .buddy.bounce{ animation:buddyBounce .5s ease }
+  @keyframes buddyBounce{ 0%{ transform:translateY(0) } 40%{ transform:translateY(-14px) } 100%{ transform:translateY(0) } }
+  .buddy-tray{ display:none !important; }
+
+  .toast{ position:fixed; left:50%; top:16px; transform:translateX(-50%); background:#fff; border-radius:12px; padding:10px 14px; box-shadow:0 6px 16px rgba(0,0,0,.18); opacity:0; pointer-events:none }
+  .toast.show{ opacity:1; animation:fadeOut 1600ms 600ms forwards }
+  @keyframes fadeOut{ to{ opacity:0; transform:translateX(-50%) translateY(-6px) } }
+
+  .overlay{ position:fixed; inset:0; background:rgba(0,0,0,.35); display:flex; align-items:center; justify-content:center; padding:16px; z-index:20 }
+  .panel{ background:#fff; border-radius:16px; padding:18px 20px; width:min(520px,90%); box-shadow:0 12px 28px rgba(0,0,0,.25); text-align:center }
+  .panel h2{ margin:0 0 10px }
+  .panel .row{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:10px }
+
+  .ghost{ display:none }
+  .flash{ position:absolute; inset:0; background:rgba(255,255,200,.65); animation:flash .45s ease; pointer-events:none }
+  @keyframes flash{ from{ opacity:.9 } to{ opacity:0 } }
+
+  @media (max-width:620px){ .sun{width:70px; height:70px} .buddy{width:72px} }
+</style>
+</head>
+<body>
+  <header>
+    <h1>尋找太陽</h1>
+    <div class="hud">
+      <div class="stat">關卡：<span id="level">1</span></div>
+      <div class="stat">抓到太陽：<span id="catches">0</span>/3</div>
+      <button class="btn" id="hintBtn">提示</button>
+      <button class="btn" id="resetBtn">重新開始</button>
+      <button class="btn" id="backBtn">回到目錄</button>
+    </div>
+  </header>
+
+  <div class="stage-wrap">
+    <div class="stage" id="stage">
+      <div class="bg" id="bg"></div>
+      <div class="sun hidden cloak" id="sun" aria-label="太陽"></div>
+      <img class="buddy" id="buddy" alt="夥伴" />
+      <div class="buddy-tray" id="buddyTray"></div>
+      <div class="curtain" id="curtain"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast">找到太陽！下一關 ✨</div>
+
+  <div class="overlay" id="startOverlay">
+    <div class="panel">
+      <h2>準備好了嗎？</h2>
+      <p>把雲朵<strong>拖開</strong>，露出太陽；每關抓到 <b>3 次</b> 太陽就過關。</p>
+      <div class="row"><button class="btn" id="startGameBtn">開始遊戲</button></div>
+    </div>
+  </div>
+
+  <div class="overlay ghost" id="endOverlay">
+    <div class="panel" id="endPanel">
+      <h2 id="endTitle">太棒了！</h2>
+      <p id="endText">你完成了「尋找太陽」！要不要接著挑戰「影子配對」？</p>
+      <div class="row">
+        <button class="btn" id="playAgainBtn">再玩一次</button>
+        <button class="btn" id="goMenuBtn">回到目錄</button>
+        <button class="btn" id="nextGameBtn" style="font-size:1.05rem;">下一個挑戰</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+const LEVELS = [
+  { covers: 4, bg: 'lakeside',      cloudTop:'#b9c7d3', cloudBottom:'#9fafbe', shadow:'0 10px 20px rgba(0,0,0,.26)' },
+  { covers: 6, bg: 'night-village', cloudTop:'#a3b1c1', cloudBottom:'#8ea0b4', shadow:'0 12px 22px rgba(0,0,0,.30)' },
+  { covers: 8, bg: 'starry-sky',    cloudTop:'#8c9dad', cloudBottom:'#74859a', shadow:'0 14px 26px rgba(0,0,0,.34)' }
+];
+const BG_BASE = 'images/backgrounds/';
+
+const stage = document.getElementById('stage');
+const bgEl = document.getElementById('bg');
+const sunEl = document.getElementById('sun');
+const levelEl = document.getElementById('level');
+const catchesEl = document.getElementById('catches');
+const toast = document.getElementById('toast');
+const resetBtn = document.getElementById('resetBtn');
+const backBtn = document.getElementById('backBtn');
+const hintBtn = document.getElementById('hintBtn');
+const buddyEl = document.getElementById('buddy');
+const startOverlay = document.getElementById('startOverlay');
+const endOverlay = document.getElementById('endOverlay');
+const startGameBtn = document.getElementById('startGameBtn');
+const playAgainBtn = document.getElementById('playAgainBtn');
+const goMenuBtn = document.getElementById('goMenuBtn');
+const nextGameBtn = document.getElementById('nextGameBtn');
+const curtain = document.getElementById('curtain');
+
+const urlParams = new URLSearchParams(location.search);
+const spriteParam = urlParams.get('sprite');
+const buddyParam  = urlParams.get('buddy') || urlParams.get('animal');
+
+(function initBuddy(){
+  let src = null;
+  if (spriteParam) src = decodeURIComponent(spriteParam);
+  else if (buddyParam) src = `images/${buddyParam}/${buddyParam}.png`;
+  if (src){ buddyEl.src = src; buddyEl.style.display = 'block'; }
+  const tray = document.getElementById('buddyTray'); if (tray) tray.style.display = 'none';
+})();
+
+let level = 1;
+let catches = 0;
+let sunClickable = false;
+let hintUsedThisLevel = false;
+
+const rand  = (min, max)=> Math.random() * (max - min) + min;
+const rect  = el => el.getBoundingClientRect();
+const sRect = () => rect(stage);
+function showToast(text){ toast.textContent = text; toast.classList.remove('show'); void toast.offsetWidth; toast.classList.add('show'); }
+
+function isAnyCloudCoveringSun(){
+  const s = rect(sunEl);
+  return Array.from(stage.querySelectorAll('.cover')).some(c=>{
+    const b = rect(c);
+    const cx = b.left + b.width/2, cy = b.top + b.height/2;
+    return (cx > s.left && cx < s.right && cy > s.top && cy < s.bottom);
+  });
+}
+function ensureRevealIfUncovered(){
+  if(!isAnyCloudCoveringSun()){
+    sunEl.style.opacity = 1; sunEl.classList.add('glow'); sunClickable = true;
+  }else{
+    sunEl.style.opacity = 0; sunEl.classList.remove('glow'); sunClickable = false;
+  }
+}
+
+/* 小薄幕輔助：顯示／隱藏 */
+function withCurtain(fn){
+  curtain.classList.add('show');
+  // 等薄幕蓋上去一點點（避免一瞬間露出）
+  setTimeout(async ()=>{
+    try{ await fn(); } finally{
+      // 讓畫面先完成 2 幀，再拉開薄幕
+      requestAnimationFrame(()=>requestAnimationFrame(()=>{
+        curtain.classList.remove('show');
+      }));
+    }
+  }, 60);
+}
+
+function clearStage(){
+  Array.from(stage.querySelectorAll('.cover')).forEach(el=>el.remove());
+  catches = 0; catchesEl.textContent = '0';
+  sunEl.classList.add('cloak','hidden');      // 完全隱身
+  sunEl.style.opacity = 0; sunEl.classList.remove('glow');
+  sunClickable = false;
+}
+function layoutSun(){
+  const padX = 10, padY = 10;
+  const x = rand(padX, 100-padX);
+  const y = rand(20+padY, 70);
+  sunEl.style.left = x + '%';
+  sunEl.style.top  = y + '%';
+}
+
+function makeDraggable(el){
+  let dragging = false, grabDx = 0, grabDy = 0;
+  function startDrag(e){
+    dragging = true; el.classList.add('dragging');
+    const b = rect(el);
+    const startX = (e.touches ? e.touches[0].clientX : e.clientX);
+    const startY = (e.touches ? e.touches[0].clientY : e.clientY);
+    grabDx = startX - b.left; grabDy = startY - b.top; e.preventDefault();
+  }
+  function onMove(e){
+    if(!dragging) return;
+    const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
+    const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
+    const sr = sRect();
+    let x = clientX - sr.left - grabDx + el.offsetWidth/2;
+    let y = clientY - sr.top  - grabDy + el.offsetHeight/2;
+    x = Math.max(0, Math.min(x, sr.width));
+    y = Math.max(0, Math.min(y, sr.height));
+    el.style.left = x + 'px';
+    el.style.top  = y + 'px';
+    el.style.transform = 'translate(-50%, -50%)';
+    ensureRevealIfUncovered();
+    e.preventDefault();
+  }
+  function endDrag(){ if(!dragging) return; dragging = false; el.classList.remove('dragging'); ensureRevealIfUncovered(); }
+  el.addEventListener('mousedown', startDrag);
+  el.addEventListener('touchstart', startDrag, {passive:false});
+  window.addEventListener('mousemove', onMove, {passive:false});
+  window.addEventListener('touchmove', onMove, {passive:false});
+  window.addEventListener('mouseup', endDrag);
+  window.addEventListener('touchend', endDrag);
+}
+
+function addCloud(){
+  const el = document.createElement('div');
+  el.className = 'cover cloud ' + (['c1','c2','c3'][Math.floor(rand(0,3))]);
+  const spec = LEVELS[Math.min(level-1, LEVELS.length-1)];
+  el.style.setProperty('--cloud-top', spec.cloudTop);
+  el.style.setProperty('--cloud-bottom', spec.cloudBottom);
+  el.style.setProperty('--cloud-shadow', spec.shadow);
+  el.style.left = rand(8, 92) + '%';
+  el.style.top  = rand(18, 80) + '%';
+  el.style.transform = 'translate(-50%, -50%)';
+  stage.appendChild(el);
+  makeDraggable(el);
+  return el;
+}
+
+function relocateSunAndClouds(){
+  // 1) 完全隱藏太陽
+  sunEl.classList.add('cloak','hidden');
+  sunEl.style.opacity = 0; sunEl.classList.remove('glow'); sunClickable = false;
+
+  // 2) 清雲、重新放太陽
+  Array.from(stage.querySelectorAll('.cover')).forEach(el=>el.remove());
+  layoutSun();
+  const spec = LEVELS[Math.min(level-1, LEVELS.length-1)];
+
+  // 3) 放一朵「必定覆蓋」太陽的雲（靠太陽 ±4%）——保證覆蓋
+  const near = addCloud();
+  const sx = sunEl.offsetLeft / stage.clientWidth * 100;
+  const sy = sunEl.offsetTop  / stage.clientHeight * 100;
+  near.style.left = (sx + rand(-4,4)) + '%';
+  near.style.top  = (sy + rand(-4,4)) + '%';
+
+  // 4) 其他雲
+  for(let i=1;i<spec.covers;i++){ addCloud(); }
+
+  // 5) 等兩幀 → 解除 cloak，但維持 hidden；先判斷是否被覆蓋，再顯示
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    sunEl.classList.remove('cloak');
+    // 判斷覆蓋狀態後再顯示（若已被蓋住，顯示也不會被看到）
+    sunEl.classList.remove('hidden');
+    ensureRevealIfUncovered();
+  }));
+}
+
+function handleStageClick(e){
+  if(!sunClickable) return;
+  if(e.target === sunEl){
+    catches++; catchesEl.textContent = String(catches);
+    buddyEl.classList.remove('bounce'); void buddyEl.offsetWidth; buddyEl.classList.add('bounce');
+    playFoundFeedback();
+    if(catches < 3){
+      showToast(`太陽跑掉了！再找一次（${catches}/3）`);
+      withCurtain(relocateSunAndClouds);
+    } else {
+      showToast('太陽被你抓到啦！下一關 ✨');
+      setTimeout(()=> nextLevel(), 650);
+    }
+  }
+}
+
+function buildLevel(){
+  withCurtain(()=>{
+    clearStage(); levelEl.textContent = String(level);
+    const spec = LEVELS[Math.min(level-1, LEVELS.length-1)];
+    bgEl.style.backgroundImage = `url(${BG_BASE}${spec.bg}.jpg)`;
+    relocateSunAndClouds();
+    hintUsedThisLevel = false;
+  });
+}
+
+function gameWin(){ endOverlay.classList.remove('ghost'); }
+function nextLevel(){
+  level++;
+  if(level > LEVELS.length){ gameWin(); }
+  else { buildLevel(); }
+}
+
+function carryParams(url){
+  const q = new URLSearchParams();
+  if (buddyParam)  q.set('buddy', buddyParam);
+  if (spriteParam) q.set('sprite', spriteParam);
+  return `${url}?${q.toString()}`;
+}
+function goMenu(){
+  const target = 'games-menu.html';
+  if (window.parent && window.parent !== window){
+    parent.postMessage({ type:'nav', page:target, params:{ buddy:buddyParam, sprite:spriteParam } }, '*');
+  } else {
+    location.href = carryParams(target);
+  }
+}
+function goNextGame(){
+  const target = 'shadow-match.html';
+  if (window.parent && window.parent !== window){
+    parent.postMessage({ type:'nav', page:target, params:{ buddy:buddyParam, sprite:spriteParam } }, '*');
+  } else {
+    location.href = carryParams(target);
+  }
+}
+
+hintBtn.addEventListener('click', ()=>{
+  if(hintUsedThisLevel){ showToast('本關提示已用過！'); return; }
+  hintUsedThisLevel = true;
+  sunEl.classList.add('glow'); sunEl.style.opacity = 1;
+  stage.querySelectorAll('.cover').forEach((c,i)=>{
+    c.animate(
+      [{transform:c.style.transform+' translateY(0px)'},{transform:c.style.transform+' translateY(-6px)'},{transform:c.style.transform+' translateY(0px)'}],
+      {duration:350+60*i, easing:'ease-out'}
+    );
+  });
+  setTimeout(()=>{ if(!sunClickable){ sunEl.style.opacity = 0; sunEl.classList.remove('glow'); } }, 700);
+});
+
+function startGame(){ startOverlay.classList.add('ghost'); level = 1; catches = 0; buildLevel(); }
+
+function playFoundFeedback(){
+  const fx = document.createElement('div'); fx.className='flash'; stage.appendChild(fx);
+  fx.addEventListener('animationend', ()=> fx.remove());
+  try{ new Audio('sounds/found.mp3').play().catch(()=>{}); }catch(e){}
+}
+
+startGameBtn.addEventListener('click', startGame);
+resetBtn.addEventListener('click', startGame);
+backBtn.addEventListener('click', goMenu);
+stage.addEventListener('click', handleStageClick);
+playAgainBtn.addEventListener('click', ()=>{ endOverlay.classList.add('ghost'); startGame(); });
+goMenuBtn.addEventListener('click', goMenu);
+nextGameBtn.addEventListener('click', goNextGame);
+
+/* 告知 app-shell：這頁使用主題曲 */
+try{ if (window.parent && window.parent !== window){ parent.postMessage({type:'setTrack', track:'main'}, '*'); } }catch(e){}
+</script>
+</body>
+</html>

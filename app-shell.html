@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>影子村莊大冒險</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;height:100%;font-family:'Noto Sans TC',sans-serif;background:#000}
+  .shell{position:fixed;inset:0;display:flex;flex-direction:column}
+  header{position:fixed;top:16px;right:16px;z-index:50}
+  /* 單一喇叭按鈕（統一樣式） */
+  .sound-btn{
+    width:44px;height:44px;border:none;border-radius:10px;
+    background:rgba(255,255,255,.12);backdrop-filter:blur(6px);
+    color:#fff;font-size:22px;cursor:pointer;display:grid;place-items:center;
+    border:1px solid rgba(255,255,255,.22);
+  }
+  .sound-btn:focus-visible{outline:2px solid #ffd54f;outline-offset:2px}
+
+  .content{position:fixed;inset:0}
+  iframe{position:absolute;inset:0;border:0;width:100%;height:100%;background:#000}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header>
+    <button id="soundBtn" class="sound-btn" aria-label="音效"><span id="soundIcon">🔊</span></button>
+  </header>
+  <div class="content">
+    <iframe id="frame" allow="autoplay"></iframe>
+  </div>
+</div>
+
+<script>
+/* ========= 解析初始參數：?page=XXX&buddy=...&sprite=... ========= */
+const qs = new URLSearchParams(location.search);
+const firstPage = qs.get('page') || 'index.html';
+const buddy = qs.get('buddy') || '';     // 可空
+const sprite = qs.get('sprite') || '';   // 可空
+
+/* ========= 載入子頁（把 buddy/sprite 傳遞給子頁） ========= */
+(function loadChild(){
+  const f = document.getElementById('frame');
+  const inner = new URLSearchParams();
+  if (buddy)  inner.set('buddy', buddy);
+  if (sprite) inner.set('sprite', sprite);
+  f.src = firstPage + (inner.toString()?`?${inner}`:'');
+})();
+
+/* ========= 唯一 BGM 管理（兩首：main / calm） ========= */
+(function(){
+  const STORE_KEY = 'game_sound_enabled'; // 'off' 表示靜音
+  if (!localStorage.getItem(STORE_KEY)) localStorage.setItem(STORE_KEY,'on');
+
+  const tracks = {
+    main: new Audio('sounds/bgm_main_cute_joyful.mp3'),
+    calm: new Audio('sounds/bgm_calm_daily.mp3')
+  };
+  Object.values(tracks).forEach(a => { a.loop = true; a.preload = 'auto'; a.volume = 0; });
+
+  let cur = null;        // 目前在播的 Audio
+  let want = 'main';     // 想要播放哪一首（由子頁面要求）
+  let primed = false;    // 是否已解鎖自動播放政策
+
+  function isOn(){ return localStorage.getItem(STORE_KEY) !== 'off'; }
+
+  function fadeTo(a, target=0.38, ms=300){
+    const step = (target - a.volume) / Math.max(1, ms/40);
+    const id = setInterval(()=>{
+      a.volume = Math.max(0, Math.min(1, a.volume + step));
+      const done = (step>0 && a.volume>=target) || (step<0 && a.volume<=target);
+      if (done) clearInterval(id);
+    }, 40);
+  }
+  function fadeOutStop(a, ms=220){
+    const id = setInterval(()=>{
+      a.volume = Math.max(0, a.volume - 1/Math.max(1, ms/40));
+      if (a.volume <= 0){ clearInterval(id); a.pause(); }
+    }, 40);
+  }
+
+  async function ensurePlay(){
+    if (!primed){
+      try { await tracks[want].play(); } catch(e) {}
+      primed = true;
+    }
+  }
+  async function applyTrack(){
+    if (!isOn()){
+      if (cur) fadeOutStop(cur, 200);
+      return;
+    }
+    const next = tracks[want];
+    if (!next) return;
+    if (cur === next){
+      if (next.paused) { try{ await next.play(); }catch(e){} }
+      fadeTo(next, 0.38, 220);
+      return;
+    }
+    if (cur) fadeOutStop(cur, 200);
+    try{ await next.play(); }catch(e){}
+    fadeTo(next, 0.38, 260);
+    cur = next;
+  }
+
+  // 喇叭按鈕
+  const btn = document.getElementById('soundBtn');
+  const icon = document.getElementById('soundIcon');
+  function refreshIcon(){ if(icon) icon.textContent = isOn() ? '🔊' : '🔈'; }
+  refreshIcon();
+  if (btn){
+    btn.addEventListener('click', async ()=>{
+      localStorage.setItem(STORE_KEY, isOn() ? 'off' : 'on');
+      refreshIcon();
+      await ensurePlay();
+      applyTrack();
+    });
+  }
+
+  // 首次使用者互動後啟動播放
+  window.addEventListener('pointerdown', async ()=>{
+    await ensurePlay();
+    applyTrack();
+  }, { once:true });
+
+  // 子頁面訊息：切歌 / 靜音 / 導航
+  window.addEventListener('message', async (e)=>{
+    const msg = e.data || {};
+    if (msg.type === 'setTrack' && (msg.track === 'main' || msg.track === 'calm')){
+      want = msg.track;
+      await ensurePlay();
+      applyTrack();
+    } else if (msg.type === 'toggleMute'){
+      localStorage.setItem(STORE_KEY, isOn() ? 'off' : 'on');
+      refreshIcon();
+      applyTrack();
+    } else if (msg.type === 'nav'){
+      // {type:'nav', page:'xxx.html', params:{ buddy, sprite }}
+      const p = msg.page || 'index.html';
+      const params = new URLSearchParams();
+      if (msg.params && msg.params.buddy)  params.set('buddy', msg.params.buddy);
+      if (msg.params && msg.params.sprite) params.set('sprite', msg.params.sprite);
+      navigateTo(p + (params.toString()?`?${params}`:'')); // 走統一流程
+    }
+  });
+
+  // iframe 載入後，依照路徑自動決定要播哪首（保險）
+  const frame = document.getElementById('frame');
+  function pickTrackByPath(p){
+    // 預設：menu/index/dress/find/shadow → main；move-the-sun → calm
+    if (/move-the-sun/i.test(p)) return 'calm';
+    return 'main';
+  }
+  function navigateTo(url){
+    frame.src = url;
+    // 依新 URL 先行切換曲目（不用等子頁面發訊息）
+    try{
+      const u = new URL(url, location.href);
+      want = pickTrackByPath(u.pathname);
+      applyTrack();
+    }catch(e){}
+  }
+  if (frame){
+    frame.addEventListener('load', ()=>{
+      try{
+        const url = new URL(frame.src, location.href);
+        want = pickTrackByPath(url.pathname);
+        applyTrack();
+        // 同步把目前靜音狀態告訴子頁面（可選）
+        frame.contentWindow && frame.contentWindow.postMessage({
+          type:'state',
+          muted: !isOn()
+        }, '*');
+      }catch(e){}
+    });
+  }
+
+  // 允許從網址列直接帶 page，也適用 navigateTo（已先在上面 loadChild 設 src，一樣會觸發 load）
+})();
+</script>
+</body>
+</html>

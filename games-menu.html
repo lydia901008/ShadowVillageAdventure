@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>選擇挑戰關卡</title>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#5d4037; --muted:#8d6e63; --bg-a:#fff3e0; --bg-b:#e0f7fa;
+    --card:#ffffff; --shadow:rgba(0,0,0,.12); --accent:#f39c12;
+    --night-a:#0f1b34; --night-b:#1d315a; --cloud:#b7c1cf; --cloud-hi:#c8d1dd;
+    --sky-d1:#e9f4ff; --sky-d2:#f7fdff; --line:#6d88a8;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; font-family:'Baloo 2', cursive; color:var(--ink);
+    background:linear-gradient(135deg,var(--bg-a),var(--bg-b));
+    display:flex; flex-direction:column; align-items:center;
+  }
+  header{
+    width:min(1200px,100%); display:flex; align-items:center; justify-content:space-between;
+    padding:14px 16px 6px; gap:12px;
+  }
+  h1{ margin:0 0 4px }
+  .sub{ color:var(--muted); margin:0 }
+  .top-right{ display:flex; align-items:center; gap:10px }
+
+  .capsule{
+    display:flex; align-items:center; gap:10px; padding:6px 10px; border-radius:999px;
+    background:var(--card); box-shadow:0 4px 10px var(--shadow);
+    text-decoration:none; color:inherit; cursor:pointer;
+  }
+  .capsule img{ width:48px; height:48px; object-fit:contain; border-radius:10px }
+  .capsule .txt{ font-size:1rem; white-space:nowrap }
+
+  main.grid{
+    width:min(1200px,100%); display:grid; grid-template-columns:repeat(3, 1fr);
+    gap:16px; padding:0 16px 16px; flex:1;
+  }
+  .card{
+    position:relative; background:var(--card); border-radius:18px; overflow:hidden;
+    box-shadow:0 8px 18px var(--shadow); cursor:pointer; outline:none; border:2px solid transparent;
+    display:flex; flex-direction:column; height:100%;
+    transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+  }
+  .card:focus-visible{ border-color:#00000055 }
+  .card:hover{ transform:translateY(-2px); box-shadow:0 14px 26px rgba(0,0,0,.14) }
+  .thumb{ flex:1; min-height:38vh; position:relative; display:flex; align-items:center; justify-content:center }
+  .meta{ padding:12px 14px 14px }
+  .title{ margin:0 0 6px; font-size:1.2rem }
+  .desc{ margin:0; color:var(--muted); font-size:.95rem; line-height:1.35 }
+
+  /* 遊戲1縮圖 */
+  .thumb.sunhunt{ background:linear-gradient(180deg, var(--night-a), var(--night-b)); overflow:hidden }
+  .sunhunt .sun{
+    position:absolute; width:76px; height:76px; border-radius:50%;
+    background:radial-gradient(circle at 35% 35%, #fff8b5, #ffe082 45%, #fbc02d 70%, #f39c12 100%);
+    box-shadow:0 0 14px rgba(243,156,18,.35);
+    left:52%; top:54%; transform:translate(-50%,-50%); z-index:1; opacity:.9;
+  }
+  .cloud{ position:absolute; border-radius:68px; background:var(--cloud);
+    filter:drop-shadow(0 4px 10px rgba(0,0,0,.12)); z-index:2; }
+  .cloud::before, .cloud::after{ content:""; position:absolute; background:var(--cloud-hi); border-radius:50% }
+  .c1{ width:210px; height:78px; top:48%; left:42%; transform:translate(-50%,-50%) rotate(-3deg) }
+  .c1::before{ width:120px; height:120px; left:24px; top:-36px } .c1::after{ width:86px; height:86px; right:18px; top:-20px }
+  .c2{ width:190px; height:70px; top:55%; left:60%; transform:translate(-50%,-50%) rotate(4deg) }
+  .c2::before{ width:100px; height:100px; left:22px; top:-30px } .c2::after{ width:78px; height:78px; right:16px; top:-18px }
+  .c3{ width:170px; height:66px; top:60%; left:48%; transform:translate(-50%,-50%) rotate(-8deg) }
+  .c3::before{ width:90px; height:90px; left:18px; top:-26px } .c3::after{ width:66px; height:66px; right:14px; top:-18px }
+
+  /* 遊戲2縮圖 */
+  .thumb.shadowmatch{ background:linear-gradient(180deg, #e3f2fd, #fff) }
+  .cards{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; gap:22px }
+  .card-tile{ width:110px; height:150px; background:#fff; border-radius:14px; box-shadow:0 10px 20px rgba(0,0,0,.12); position:relative; }
+  .card-tile::before{ content:""; position:absolute; inset:14px; border-radius:10px; background:conic-gradient(from 180deg, #cfd8dc, #b0bec5, #cfd8dc) }
+  .card-tile.silhouette::before{ background:#263238 }
+
+  /* 遊戲3縮圖 */
+  .thumb.sunpath{ background:linear-gradient(180deg, var(--sky-d1), var(--sky-d2) 60%, #eaf9ea) }
+  .horizon{ position:absolute; left:0; right:0; bottom:78px; height:6px; background:#7cb342 }
+  .hill{ position:absolute; left:10%; right:10%; bottom:78px; height:110px; border-radius:50%/100% 100% 0 0; background:linear-gradient(#98d398,#7ecb7e) }
+  .arc{ position:absolute; left:8%; right:8%; bottom:86px; height:180px; border:3px dashed var(--line); border-bottom:none; border-radius:180px 180px 0 0/100% 100% 0 0 }
+  .tick{ position:absolute; bottom:86px; width:6px; height:18px; background:var(--line); opacity:.7; border-radius:3px }
+  .t1{ left:14% } .t2{ left:50%; transform:translateX(-50%) } .t3{ right:14% }
+  .sun-icon{
+    position:absolute; left:62%; bottom:180px; width:64px; height:64px; border-radius:50%;
+    background:radial-gradient(circle at 35% 35%, #fff8b5, #ffe082 45%, #fbc02d 70%, #f39c12 100%);
+    box-shadow:0 0 10px rgba(243,156,18,.4)
+  }
+  .figure{ position:absolute; left:50%; transform:translateX(-50%); bottom:78px; width:18px; height:48px; background:#3a3a3a; border-radius:6px }
+  .figure::before{ content:""; position:absolute; width:26px; height:26px; border-radius:50%; background:#3a3a3a; top:-22px; left:50%; transform:translateX(-50%) }
+  .shadow{ position:absolute; left:calc(50% + 18px); bottom:78px; width:120px; height:24px; background:rgba(0,0,0,.22); border-radius:50%; transform-origin:left center; transform:skewX(-18deg) rotate(-12deg); filter:blur(1px) }
+
+  @media (max-width:1100px){ .thumb{ min-height:34vh } }
+  @media (max-width:900px){ main.grid{ grid-template-columns:1fr } .thumb{ min-height:32vh } }
+</style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>選擇挑戰關卡</h1>
+      <p class="sub">點選一個遊戲開始挑戰吧！</p>
+    </div>
+    <div class="top-right">
+      <a id="toDress" class="capsule">
+        <img id="buddyImg" alt="角色">
+        <span class="txt">前往換裝</span>
+      </a>
+    </div>
+  </header>
+
+  <main class="grid" id="grid">
+    <a class="card" id="game1" tabindex="0" aria-label="尋找太陽">
+      <div class="thumb sunhunt">
+        <div class="sun"></div>
+        <div class="cloud c1"></div>
+        <div class="cloud c2"></div>
+        <div class="cloud c3"></div>
+      </div>
+      <div class="meta">
+        <h3 class="title">尋找太陽</h3>
+        <p class="desc">在夜晚裡，把雲移開，找到會亂跑的太陽！</p>
+      </div>
+    </a>
+
+    <a class="card" id="game2" tabindex="0" aria-label="影子配對">
+      <div class="thumb shadowmatch">
+        <div class="cards">
+          <div class="card-tile"></div>
+          <div class="card-tile silhouette"></div>
+          <div class="card-tile"></div>
+        </div>
+      </div>
+      <div class="meta">
+        <h3 class="title">影子配對</h3>
+        <p class="desc">翻牌找一找！小動物們的影子在哪裡。</p>
+      </div>
+    </a>
+
+    <a class="card" id="game3" tabindex="0" aria-label="太陽到正確位置">
+      <div class="thumb sunpath">
+        <div class="arc"></div>
+        <div class="tick t1"></div>
+        <div class="tick t2"></div>
+        <div class="tick t3"></div>
+        <div class="sun-icon"></div>
+        <div class="horizon"></div>
+        <div class="hill"></div>
+        <div class="figure"></div>
+        <div class="shadow"></div>
+      </div>
+      <div class="meta">
+        <h3 class="title">太陽到正確位置</h3>
+        <p class="desc">拖曳太陽到對的位置，讓影子方向正確。</p>
+      </div>
+    </a>
+  </main>
+
+<script>
+  // 優先順序：URL 參數 > localStorage > 預設
+  const LS_BUDDY  = 'player_buddy';
+  const LS_SPRITE = 'player_sprite';
+
+  const params = new URLSearchParams(location.search);
+  const fromParamBuddy  = params.get('buddy');
+  const fromParamSprite = params.get('sprite');
+
+  // 若 URL 有新選擇 → 套用並存檔
+  if (fromParamBuddy)  localStorage.setItem(LS_BUDDY,  fromParamBuddy);
+  if (fromParamSprite) localStorage.setItem(LS_SPRITE, fromParamSprite);
+
+  let buddy  = fromParamBuddy  || localStorage.getItem(LS_BUDDY)  || 'cat';
+  let sprite = fromParamSprite || localStorage.getItem(LS_SPRITE) || 'images/cat/cat-sling.png';
+
+  const buddyImg = document.getElementById('buddyImg');
+  buddyImg.src = decodeURIComponent(sprite);
+
+  function sendNav(page, extra = {}) {
+    const pack = { buddy, sprite, ...extra };
+    // 同步保存目前角色，避免之後重整遺失
+    localStorage.setItem(LS_BUDDY,  buddy);
+    localStorage.setItem(LS_SPRITE, sprite);
+
+    if (window.parent && window.parent !== window) {
+      parent.postMessage({ type:'nav', page, params: pack }, '*');
+    } else {
+      const q = new URLSearchParams(pack);
+      location.href = `app-shell.html?page=${encodeURIComponent(page)}&${q.toString()}`;
+    }
+  }
+
+  document.getElementById('game1').addEventListener('click', ()=> sendNav('find-the-sun.html'));
+  document.getElementById('game2').addEventListener('click', ()=> sendNav('shadow-match.html'));
+  document.getElementById('game3').addEventListener('click', ()=> sendNav('move-the-sun.html'));
+  document.getElementById('toDress').addEventListener('click', ()=> sendNav('select-character.html', {}));
+
+  // 通知 app-shell 播主題曲（本頁不自行播放）
+  try{ if (window.parent && window.parent !== window) {
+    parent.postMessage({ type:'setTrack', track:'main' }, '*');
+  }}catch(e){}
+</script>
+</body>
+</html>

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>影子村莊大冒險</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  html, body {
+    margin:0; padding:0; height:100%;
+    font-family:'Noto Sans TC', sans-serif; color:#eee;
+    background:#000 url('images/night-village.jpg') center/cover no-repeat fixed;
+  }
+  .overlay {
+    position:fixed; inset:0; background:rgba(0,0,0,.38);
+    display:flex; align-items:center; justify-content:center; text-align:center; padding:24px;
+  }
+  .wrap { max-width:900px; width:100%; }
+  h1 { margin:0 0 10px; font-size:clamp(32px,5vw,56px); color:#FFD85E; text-shadow:0 4px 18px rgba(0,0,0,.65); }
+  .sub { margin:0 0 28px; font-size:clamp(16px,2.6vw,20px); color:#f3f3f3; opacity:.95; }
+  .btns { display:flex; gap:16px; justify-content:center; flex-wrap:wrap; }
+  .btn {
+    appearance:none; border:none; border-radius:16px; padding:14px 26px; cursor:pointer;
+    background:#ffcc33; color:#3d2b13; font-size:18px; font-weight:700;
+    box-shadow:0 6px 18px rgba(255,204,51,.35); transition:transform .15s ease, box-shadow .15s ease;
+  }
+  .btn:hover { transform:translateY(-1px); box-shadow:0 10px 26px rgba(255,204,51,.45); }
+</style>
+</head>
+<body>
+<div class="overlay">
+  <div class="wrap">
+    <h1>影子村莊大冒險</h1>
+    <p class="sub">準備好開始冒險或先到換裝間打扮一下吧！</p>
+    <div class="btns">
+      <button class="btn" id="goMenu">直接挑戰🎮</button>
+      <button class="btn" id="goDress">先去換裝👕</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function sendNav(page, params){
+    if (window.parent && window.parent !== window) {
+      parent.postMessage({ type:'nav', page, params }, '*');
+    } else {
+      const q = new URLSearchParams(params||{});
+      location.href = `app-shell.html?page=${encodeURIComponent(page)}${q.toString()?`&${q}`:''}`;
+    }
+  }
+
+  document.getElementById('goMenu').addEventListener('click', ()=>{
+    sendNav('games-menu.html', {
+      buddy: 'cat',
+      sprite: 'images/cat/cat-sling.png'
+    });
+  });
+
+  document.getElementById('goDress').addEventListener('click', ()=>{
+    sendNav('select-character.html', {});
+  });
+</script>
+</body>
+</html>

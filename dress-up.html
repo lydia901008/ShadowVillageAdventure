@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>動物換裝</title>
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Baloo 2', cursive; background: linear-gradient(to right, #fff3e0, #e0f7fa); margin: 0; color: #5d4037; display: flex; flex-direction: column; align-items: center; height: 100vh; }
+    h1 { margin: 20px 0; }
+    .container { display: flex; max-width: 1000px; width: 100%; gap: 40px; justify-content: center; align-items: flex-start; }
+    #characterContainer { width: 300px; display: flex; flex-direction: column; align-items: center; position: relative; }
+    #characterImage { width: 100%; max-height: 360px; object-fit: contain; border-radius: 20px; box-shadow: 0 4px 8px rgba(0,0,0,0.15); transition: opacity 0.3s ease; background: #fff; }
+    #resetBtn { margin-top: 16px; padding: 10px 25px; font-size: 1rem; border-radius: 12px; border: none; background-color: #f39c12; color: white; cursor: pointer; box-shadow: 0 3px 8px rgba(243,156,18,0.6); transition: background-color 0.3s ease; }
+    #resetBtn:hover { background-color: #e67e22; }
+    #wardrobe { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; width: 520px; }
+    .wardrobe-item { display:flex; align-items:center; justify-content:center; height: 140px; cursor: pointer; border-radius: 12px; border: 2px solid transparent; padding: 0; background: white; box-shadow: 0 2px 6px rgba(0,0,0,0.1); user-select: none; transition: border-color 0.3s ease, transform 0.2s ease; }
+    .wardrobe-item img { max-width: 90%; max-height: 90%; object-fit: contain; display: block; }
+    .wardrobe-item:hover { border-color: #f39c12; transform: scale(1.05); }
+    .wardrobe-item.selected { border-color: #d35400; box-shadow: 0 0 10px 3px #f39c12; transform: scale(1.05); }
+    #backBtn { position: fixed; top: 20px; left: 20px; padding: 10px 20px; font-size: 1rem; border-radius: 12px; border: none; background-color: #f39c12; color: white; cursor: pointer; box-shadow: 0 3px 8px rgba(243,156,18,0.6); transition: background-color 0.3s ease; }
+    #backBtn:hover { background-color: #e67e22; }
+    #startBtn { position: fixed; bottom: 20px; right: 20px; padding: 12px 30px; font-size: 1rem; border-radius: 12px; border: none; background-color: #27ae60; color: white; cursor: pointer; box-shadow: 0 3px 8px rgba(39,174,96,0.6); transition: background-color 0.3s ease; display: none; }
+    #startBtn:hover { background-color: #1e8449; }
+    .thumb{ width:100%; aspect-ratio:1/1; display:flex; align-items:center; justify-content:center; }
+    .mode3-wardrobe { grid-template-columns: repeat(3, 1fr); }
+  </style>
+</head>
+<body>
+  <h1>動物換裝</h1>
+  <div class="container">
+    <div id="characterContainer">
+      <img id="characterImage" src="" alt="動物裸體" />
+      <button id="resetBtn">重新搭配</button>
+    </div>
+    <div id="wardrobe"></div>
+  </div>
+  <button id="backBtn">回到上一頁</button>
+  <button id="startBtn">出發冒險</button>
+  <script>
+    const mode1 = {
+      ant: { set: 'ant-set', complete: 'ant-complete-set' },
+      bird: { set: 'bird-set', complete: 'bird-complete-set' },
+      turtle: { set: 'turtle-set', complete: 'turtle-complete-set' },
+      squirrel: { set: 'squirrel-set', complete: 'squirrel-complete-set' },
+      giraffe: { set: 'giraffe-set', complete: 'giraffe-complete-set' }
+    };
+
+    const mode2Clothes = ['adventure', 'brown-T-shirt', 'suit', 'yellow-T-shirt'];
+    const mode2 = {
+      bear: mode2Clothes,
+      elephant: mode2Clothes,
+      rhino: mode2Clothes,
+      lion: mode2Clothes
+    };
+
+    const mode3 = {
+      cat: ['cat-denim-jumpsuit', 'cat-pink-dress', 'cat-sling', 'cat-two-pieces', 'cat-yellow-dress', 'denim-jumpsuit', 'pink-dress', 'sling', 'two-pieces', 'yellow-dress'],
+      'cat-mother': ['cat-mother-denim-jumpsuit', 'cat-mother-pink-dress', 'cat-mother-sling', 'cat-mother-two-pieces', 'cat-mother-yellow-dress', 'denim-jumpsuit', 'pink-dress', 'sling', 'two-pieces', 'yellow-dress'],
+      deer: ['deer-denim-jumpsuit', 'deer-pink-dress', 'deer-sling', 'deer-two-pieces', 'deer-yellow-dress', 'denim-jumpsuit', 'pink-dress', 'sling', 'two-pieces', 'yellow-dress'],
+      fox: ['fox-denim-jumpsuit', 'fox-pink-dress', 'fox-sling', 'fox-two-pieces', 'fox-yellow-dress', 'denim-jumpsuit', 'pink-dress', 'sling', 'two-pieces', 'yellow-dress'],
+      rabbit: ['rabbit-denim-jumpsuit', 'rabbit-pink-dress', 'rabbit-sling', 'rabbit-two-pieces', 'rabbit-yellow-dress', 'denim-jumpsuit', 'pink-dress', 'sling', 'two-pieces', 'yellow-dress']
+    };
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const animal = urlParams.get('animal') || 'bear';
+    const wardrobeDiv = document.getElementById('wardrobe');
+    const characterImage = document.getElementById('characterImage');
+    const resetBtn = document.getElementById('resetBtn');
+    const backBtn = document.getElementById('backBtn');
+    const startBtn = document.getElementById('startBtn');
+
+    const nudeImage = `images/${animal}/${animal}.png`;
+    characterImage.src = nudeImage;
+
+    function createWardrobeItem(imgSrc, onClick){
+      const itemDiv = document.createElement('div');
+      itemDiv.className = 'wardrobe-item';
+      const img = document.createElement('img');
+      img.src = imgSrc; img.draggable = false;
+      img.addEventListener('error', ()=> itemDiv.style.display = 'none');
+      itemDiv.appendChild(img);
+      itemDiv.addEventListener('click', ()=>{
+        characterImage.style.opacity = 0;
+        setTimeout(()=>{ onClick(); characterImage.style.opacity = 1; }, 200);
+        document.querySelectorAll('.wardrobe-item').forEach(el=>el.classList.remove('selected'));
+        itemDiv.classList.add('selected');
+        startBtn.style.display = 'block';
+      });
+      return itemDiv;
+    }
+
+    // 建立只顯示「衣服」的縮圖：會嘗試多個路徑，避免抓到整隻動物圖
+    function createClothesWardrobeItem(displayName, onClick){
+      const candidates = [
+        `images/${animal}/${displayName}.png`,
+        `images/clothes/${displayName}.png`,
+        `images/common/${displayName}.png`
+      ];
+      const itemDiv = document.createElement('div');
+      itemDiv.className = 'wardrobe-item';
+      const img = document.createElement('img');
+      let idx = 0;
+      function tryNext(){
+        if(idx >= candidates.length){ itemDiv.style.display = 'none'; return; }
+        img.src = candidates[idx++];
+      }
+      img.draggable = false;
+      img.addEventListener('error', tryNext);
+      tryNext();
+      itemDiv.appendChild(img);
+      itemDiv.addEventListener('click', ()=>{
+        characterImage.style.opacity = 0;
+        setTimeout(()=>{ onClick(); characterImage.style.opacity = 1; }, 200);
+        document.querySelectorAll('.wardrobe-item').forEach(el=>el.classList.remove('selected'));
+        itemDiv.classList.add('selected');
+        startBtn.style.display = 'block';
+      });
+      return itemDiv;
+    }
+
+    function buildWardrobe(){
+      wardrobeDiv.innerHTML = '';
+      wardrobeDiv.classList.remove('mode3-wardrobe');
+      wardrobeDiv.style.gridTemplateColumns = 'repeat(2, 1fr)';
+      if(mode1[animal]){
+        const { set, complete } = mode1[animal];
+        wardrobeDiv.appendChild(createWardrobeItem(`images/${animal}/${set}.png`, ()=>{ characterImage.src = `images/${animal}/${complete}.png`; }));
+        return;
+      }
+      if(mode2[animal]){
+        mode2[animal].forEach(cloth => {
+          wardrobeDiv.appendChild(createWardrobeItem(`images/${animal}/${cloth}.png`, ()=>{ characterImage.src = `images/${animal}/${animal}-${cloth}.png`; }));
+        });
+        return;
+      }
+      if(mode3[animal]){
+        wardrobeDiv.style.gridTemplateColumns = 'repeat(3, 1fr)';
+        const prefix = `${animal}-`;
+        const displays = mode3[animal].map(name => name.startsWith(prefix) ? name.slice(prefix.length) : name);
+        const uniqueDisplays = [...new Set(displays)];
+        uniqueDisplays.forEach(display => {
+          const dressedPath = `images/${animal}/${animal}-${display}.png`;
+          wardrobeDiv.appendChild(
+            createClothesWardrobeItem(display, ()=>{ characterImage.src = dressedPath; })
+          );
+        });
+      }
+    }
+
+    buildWardrobe();
+
+    resetBtn.addEventListener('click', ()=>{
+      characterImage.style.opacity = 0;
+      setTimeout(()=>{
+        characterImage.src = nudeImage;
+        characterImage.style.opacity = 1;
+        document.querySelectorAll('.wardrobe-item').forEach(el=>el.classList.remove('selected'));
+        startBtn.style.display = 'none';
+      },200);
+    });
+
+    // 回到上一頁：同時相容有/無 app-shell
+    backBtn.addEventListener('click', ()=>{
+      if (window.parent && window.parent !== window){
+        parent.postMessage({ type:'nav', page:'select-character.html', params:{} }, '*');
+      } else {
+        location.href = 'select-character.html';
+      }
+    });
+
+    // ✅ 修正點：把「buddy + sprite（目前圖）」一併帶去 menu
+    startBtn.addEventListener('click', ()=>{
+      const sprite = characterImage.src; // 目前穿好的那張圖
+      const pack = { buddy: animal, sprite };
+      if (window.parent && window.parent !== window){
+        parent.postMessage({ type:'nav', page:'games-menu.html', params: pack }, '*');
+      } else {
+        const q = new URLSearchParams(pack);
+        // 若你的專案是以 app-shell 包頁面，走 app-shell；否則直連 games-menu.html
+        const useAppShell = true;
+        if (useAppShell) {
+          location.href = `app-shell.html?page=games-menu.html&${q.toString()}`;
+        } else {
+          location.href = `games-menu.html?${q.toString()}`;
+        }
+      }
+    });
+  </script>
+</body>
+</html>
