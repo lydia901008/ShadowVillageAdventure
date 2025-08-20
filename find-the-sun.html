@@ -30,7 +30,7 @@
   }
   .bg{ position:absolute; inset:0; background-size:cover; background-position:center; }
 
-  /* 轉場薄幕：重佈局時短暫覆蓋避免任何閃現 */
+  /* 轉場薄幕 */
   .curtain{
     position:absolute; inset:0; background:#0b121c;
     opacity:0; pointer-events:none; transition:opacity .12s ease;
@@ -73,10 +73,10 @@
   .cloud.c3::before{ width:70px; height:70px; left:18px; top:-22px; }
   .cloud.c3::after { width:52px; height:52px; right:16px; top:-18px; }
 
-  /* 左下角夥伴（由上一頁帶入） */
+  /* 左下角夥伴 */
   .buddy{
     position:absolute; left:14px; bottom:14px;
-    height:auto; width:auto; max-width:28vw; /* 防呆：極小螢幕避免溢出 */
+    height:auto; width:auto; max-width:28vw;
     transform-origin:bottom left; display:none
   }
   .buddy.bounce{ animation:buddyBounce .5s ease }
@@ -96,7 +96,23 @@
   .flash{ position:absolute; inset:0; background:rgba(255,255,200,.65); animation:flash .45s ease; pointer-events:none }
   @keyframes flash{ from{ opacity:.9 } to{ opacity:0 } }
 
-  @media (max-width:620px){ .sun{width:70px; height:70px} /* buddy 高度改由 JS 控制 */ }
+  @media (max-width:620px){ .sun{width:70px; height:70px} }
+
+  /* ===== 提示虛線圈（不卡版） ===== */
+  .hint-ring{
+    position:absolute; width:110px; height:110px; border-radius:50%;
+    border:3px dashed rgba(255,200,0,.95);
+    box-shadow:0 0 10px rgba(255,200,0,.7), inset 0 0 10px rgba(0,0,0,.08);
+    transform:translate3d(-50%,-50%,0);
+    pointer-events:none; z-index:4;      /* 高於雲層 */
+    will-change: opacity;
+    animation:hintBlink 1.2s ease;
+  }
+  @keyframes hintBlink{
+    from { opacity:.25 }
+    50%  { opacity:1 }
+    to   { opacity:.25 }
+  }
 </style>
 </head>
 <body>
@@ -144,7 +160,7 @@
   </div>
 
 <script>
-/* ========= 1) 關卡設定（原樣） ========= */
+/* ========= 1) 關卡設定 ========= */
 const LEVELS = [
   { covers: 4, bg: 'lakeside',      cloudTop:'#b9c7d3', cloudBottom:'#9fafbe', shadow:'0 10px 20px rgba(0,0,0,.26)' },
   { covers: 6, bg: 'night-village', cloudTop:'#a3b1c1', cloudBottom:'#8ea0b4', shadow:'0 12px 22px rgba(0,0,0,.30)' },
@@ -152,7 +168,7 @@ const LEVELS = [
 ];
 const BG_BASE = 'images/backgrounds/';
 
-/* ========= 2) DOM 變數 ========= */
+/* ========= 2) DOM ========= */
 const stage = document.getElementById('stage');
 const bgEl = document.getElementById('bg');
 const sunEl = document.getElementById('sun');
@@ -176,13 +192,12 @@ const urlParams = new URLSearchParams(location.search);
 const spriteParam = urlParams.get('sprite');
 const buddyParam  = urlParams.get('buddy') || urlParams.get('animal');
 
-/* 你提供的「最大高度表」 */
 const HEIGHTS = {
   ant:50, bear:165, bird:43, 'cat-mother':106, cat:87, deer:136,
   elephant:168, fox:109, giraffe:217, lion:180, rabbit:125,
   rhino:175, squirrel:57, turtle:68
 };
-const BASE_MAX = HEIGHTS['giraffe']; // 217，當作比例基準
+const BASE_MAX = HEIGHTS['giraffe']; // 217
 
 function detectAnimalKey(){
   if (buddyParam) return buddyParam;
@@ -203,27 +218,22 @@ function detectAnimalKey(){
 
   function applyBuddySize(){
     const isPhone = window.innerWidth <= 640;
-    const MAX_H = isPhone ? 140 : 180;  // 顯示上限（桌機較大、手機較小）
-    const MIN_H = isPhone ? 48  : 60;   // 顯示下限
-
+    const MAX_H = isPhone ? 140 : 180;
+    const MIN_H = isPhone ? 48  : 60;
     const base = HEIGHTS[key] ?? 120;
-    // 等比縮放：以 217 為 100%，映到 MAX_H；再夾在 [MIN_H, MAX_H]
     const scaled = (base / BASE_MAX) * MAX_H;
     const finalH = Math.max(MIN_H, Math.min(MAX_H, Math.round(scaled)));
-
     buddyEl.style.height = finalH + 'px';
     buddyEl.style.width = 'auto';
   }
-
   applyBuddySize();
   window.addEventListener('resize', applyBuddySize);
 })();
 
-/* ========= 4) 遊戲流程（原樣） ========= */
+/* ========= 4) 遊戲流程 ========= */
 let level = 1;
 let catches = 0;
 let sunClickable = false;
-let hintUsedThisLevel = false;
 
 const rand  = (min, max)=> Math.random() * (max - min) + min;
 const rect  = el => el.getBoundingClientRect();
@@ -246,14 +256,12 @@ function ensureRevealIfUncovered(){
   }
 }
 
-/* 小薄幕輔助：顯示／隱藏 */
+/* 小薄幕輔助 */
 function withCurtain(fn){
   curtain.classList.add('show');
   setTimeout(async ()=>{
     try{ await fn(); } finally{
-      requestAnimationFrame(()=>requestAnimationFrame(()=>{
-        curtain.classList.remove('show');
-      }));
+      requestAnimationFrame(()=>requestAnimationFrame(()=>{ curtain.classList.remove('show'); }));
     }
   }, 60);
 }
@@ -329,7 +337,7 @@ function relocateSunAndClouds(){
   layoutSun();
   const spec = LEVELS[Math.min(level-1, LEVELS.length-1)];
 
-  // 必定覆蓋太陽的一朵雲（靠太陽 ±4%）
+  // 一朵一定覆蓋太陽的雲
   const near = addCloud();
   const sx = sunEl.offsetLeft / stage.clientWidth * 100;
   const sy = sunEl.offsetTop  / stage.clientHeight * 100;
@@ -367,7 +375,6 @@ function buildLevel(){
     const spec = LEVELS[Math.min(level-1, LEVELS.length-1)];
     bgEl.style.backgroundImage = `url(${BG_BASE}${spec.bg}.jpg)`;
     relocateSunAndClouds();
-    hintUsedThisLevel = false;
   });
 }
 
@@ -378,7 +385,7 @@ function nextLevel(){
   else { buildLevel(); }
 }
 
-/* ========= 5) 導航（原樣） ========= */
+/* ========= 5) 導航 ========= */
 function carryParams(url){
   const q = new URLSearchParams();
   if (buddyParam)  q.set('buddy', buddyParam);
@@ -410,6 +417,25 @@ stage.addEventListener('click', handleStageClick);
 playAgainBtn.addEventListener('click', ()=>{ endOverlay.classList.add('ghost'); startGameBtn.click(); });
 goMenuBtn.addEventListener('click', goMenu);
 nextGameBtn.addEventListener('click', goNextGame);
+
+/* ====== 提示：太陽位置亮起虛線圈（整合好） ====== */
+let hintEl = null;
+function showHint(){
+  if (!sunEl) return;
+  if (!hintEl){
+    hintEl = document.createElement('div');
+    hintEl.className = 'hint-ring';
+    stage.appendChild(hintEl);
+  }
+  // 用目前太陽的 left/top（百分比），圈在太陽正上方且顯示在雲上層
+  hintEl.style.left = sunEl.style.left || '50%';
+  hintEl.style.top  = sunEl.style.top  || '40%';
+  hintEl.style.display = 'block';
+
+  // 1.2 秒後自動隱藏
+  setTimeout(()=>{ if(hintEl) hintEl.style.display = 'none'; }, 1000);
+}
+hintBtn.addEventListener('click', showHint);
 
 function playFoundFeedback(){
   const fx = document.createElement('div'); fx.className='flash'; stage.appendChild(fx);
