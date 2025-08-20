@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Move the Sun</title>
+<title>移動太陽</title>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
   :root{ --brand:#f39c12; --ink:#4b3b2f; --card:#ffffff; --shadow:rgba(0,0,0,.12); }
@@ -25,33 +25,40 @@
     position:relative; width:100%; aspect-ratio:16/9; background:#0e2233;
     border-radius:18px; overflow:hidden; box-shadow:0 6px 16px rgba(0,0,0,.18); user-select:none; touch-action:none;
   }
-  .bg{ position:absolute; inset:0; background-size:cover; background-position:center; filter:brightness(.97) contrast(1.02) }
+  .bg{ position:absolute; inset:0; background-size:cover; background-position:center; filter:brightness(.98) contrast(1.02) }
 
-  /* 小薄幕避免切場時看到太陽 */
-  .curtain{
-    position:absolute; inset:0; background:#0b121c; opacity:0; pointer-events:none; transition:opacity .12s ease; z-index:9;
-  }
+  .curtain{ position:absolute; inset:0; background:#0b121c; opacity:0; pointer-events:none; transition:opacity .12s ease; z-index:9; }
   .curtain.show{ opacity:1; }
 
-  /* 角色區：影子在後面（更自然） */
-  .actor-wrap{ position:absolute; left:50%; bottom:12%; transform:translateX(-50%); width:170px; z-index:2; }
-  .actor{ position:relative; display:block; width:100%; height:auto; object-fit:contain; z-index:2 }
-  .actor-shadow{
-    position:absolute; left:50%; bottom:-2px; width:100%;
-    transform:translateX(-50%); transform-origin:center bottom;
-    opacity:.28; filter:blur(2.2px) grayscale(1) brightness(0.2);
-    mix-blend-mode:multiply; z-index:1; pointer-events:none;
+  /* 角色與接地 */
+  .actor-wrap{
+    --h:200px;
+    position:absolute; left:50%; bottom:12%; transform:translateX(-50%);
+    height:var(--h); z-index:3; /* 角色在最上層 */
+    display:flex; align-items:flex-end; justify-content:center;
+  }
+  .actor{ position:relative; display:block; height:100%; width:auto; object-fit:contain; z-index:3 }
+  /* 腳下接地的微陰影（不會移動方向，只是接地感） */
+  .actor-wrap::after{
+    content:""; position:absolute; left:50%; bottom:-2px; transform:translateX(-50%);
+    width:48%; height:12px; border-radius:50%;
+    background:radial-gradient(ellipse at center, rgba(0,0,0,.23), rgba(0,0,0,0) 70%);
+    filter:blur(2px); z-index:1; pointer-events:none;
   }
 
-  /* 影子方向（左/中/右），使用伸展+傾斜製造方向感 */
-  .dir-left  .actor-shadow{ transform:translateX(-60%) skewX(-14deg) rotate(-10deg) scaleX(1.25) scaleY(.68); }
-  .dir-center.actor-wrap .actor-shadow{ transform:translateX(-50%) skewX(0deg) rotate(0deg) scaleX(1.0) scaleY(.70); }
-  .dir-right .actor-shadow{ transform:translateX(-40%) skewX(14deg) rotate(10deg) scaleX(1.25) scaleY(.68); }
+  /* 角色影子（由角色圖複製，從腳底延伸，放在角色後方） */
+  .shadow-img{
+    position:absolute; left:50%; bottom:0;
+    transform:translateX(-50%); transform-origin:center bottom; /* 錨點：腳底 */
+    opacity:.36; filter:grayscale(1) brightness(0) blur(1.2px); mix-blend-mode:multiply;
+    z-index:2; pointer-events:none;
+    transition:transform .18s ease, opacity .18s ease;
+  }
 
-  /* 太陽：上方水平拖曳 + 三個吸附點（左中右），不顯示小點 */
-  .rail{ position:absolute; top:20px; left:7%; right:7%; height:0; z-index:4; }
+  /* 上方太陽拖曳軌道 + 擺放位置指示 */
+  .rail{ position:absolute; top:70px; left:7%; right:7%; height:0; z-index:4; }
   .sun{
-    position:absolute; top:0; width:70px; height:70px; transform:translate(-50%,-50%); border-radius:50%;
+    position:absolute; top:0; width:74px; height:74px; transform:translate(-50%,-50%); border-radius:50%;
     background:radial-gradient(circle at 35% 35%, #fff8b5, #ffe082 45%, #fbc02d 70%, #f39c12 100%);
     box-shadow:0 0 16px rgba(243,156,18,.6), 0 0 30px rgba(243,156,18,.35);
     cursor:grab; z-index:4; opacity:0; transition:opacity .25s ease;
@@ -59,14 +66,23 @@
   .sun.drag{ cursor:grabbing }
   .sun.cloak{ opacity:0 !important; transition:none !important; }
 
-  /* 提示：正確位置的虛線框（短暫顯示） */
+  /* 三個固定擺放位置（淡淡的虛線圈） */
+  .snap{
+    position:absolute; top:0; transform:translate(-50%,-50%);
+    width:84px; height:84px; border-radius:50%;
+    border:2px dashed rgba(255,255,255,.65);
+    background:radial-gradient(circle, rgba(255,255,255,.08), rgba(255,255,255,0) 70%);
+    pointer-events:auto; z-index:3; transition:transform .15s ease, border-color .15s ease, background .15s ease;
+  }
+  .snap:hover{ transform:translate(-50%,-50%) scale(1.05); border-color:#fff; background:radial-gradient(circle, rgba(255,255,255,.14), rgba(255,255,255,0) 70%); }
+
+  /* 額外的提示圈（按「提示」時閃一下） */
   .hint-box{
     position:absolute; top:0; transform:translate(-50%,-50%);
-    width:76px; height:76px; border-radius:50%;
-    border:3px dashed rgba(255,255,255,.9);
+    width:88px; height:88px; border-radius:50%;
+    border:3px dashed rgba(255,255,255,.95);
     box-shadow:0 0 12px rgba(0,0,0,.22) inset;
-    display:none; z-index:3; pointer-events:none;
-    animation:hintPulse 1.2s ease;
+    display:none; z-index:3; pointer-events:none; animation:hintPulse 1.2s ease;
   }
   @keyframes hintPulse{
     from{ transform:translate(-50%,-50%) scale(.95); opacity:.2 }
@@ -83,19 +99,19 @@
   .toast.show{ opacity:1; animation:fadeOut 1600ms 600ms forwards }
   @keyframes fadeOut{ to{ opacity:0; transform:translateX(-50%) translateY(-6px) } }
 
-  /* 結尾影片尺寸 */
   .cele-video{ width:100%; max-height:50vh; border-radius:12px; box-shadow:0 8px 20px rgba(0,0,0,.25); }
 
   @media (max-width:620px){
-    .actor-wrap{ width:140px }
-    .sun{ width:58px; height:58px }
-    .hint-box{ width:64px; height:64px }
+    .actor-wrap{ bottom:10% }
+    .sun{ width:62px; height:62px }
+    .snap{ width:74px; height:74px }
+    .hint-box{ width:78px; height:78px }
   }
 </style>
 </head>
 <body>
   <header>
-    <h1>Move the Sun</h1>
+    <h1>移動太陽</h1>
     <div class="hud">
       <div class="stat">關卡：<span id="level">1</span>/3</div>
       <div class="stat">成功：<span id="wins">0</span>/1</div>
@@ -109,15 +125,23 @@
     <div class="stage" id="stage">
       <div class="bg" id="bg"></div>
 
-      <!-- 角色 + 影子（影子在後）-->
+      <!-- 角色 -->
       <div class="actor-wrap" id="actorWrap">
         <img id="actor" class="actor" alt="角色">
-        <img id="actorShadow" class="actor-shadow" alt="" aria-hidden="true">
+        <img id="shadowImg" class="shadow-img" alt="" aria-hidden="true">
       </div>
 
       <!-- 上方水平軌道（左中右吸附） -->
       <div class="rail" id="rail">
+        <!-- 固定可視的擺放位置 -->
+        <div class="snap" style="left:15%" data-idx="0" aria-label="左邊位置"></div>
+        <div class="snap" style="left:50%" data-idx="1" aria-label="中間位置"></div>
+        <div class="snap" style="left:85%" data-idx="2" aria-label="右邊位置"></div>
+
+        <!-- 提示圈（按提示才顯示） -->
         <div class="hint-box" id="hintBox"></div>
+
+        <!-- 太陽 -->
         <div class="sun cloak" id="sun" aria-label="太陽"></div>
       </div>
 
@@ -128,7 +152,7 @@
   <div class="overlay" id="startOverlay">
     <div class="panel">
       <h2>把太陽移到正確位置</h2>
-      <p>上方拖曳太陽（左／中／右三個位置），讓它符合畫面中「動物與影子」的方向關係。</p>
+      <p>把太陽拖到上方的<span style="border-bottom:2px dashed #f39c12;">虛線圈</span>（左／中／右）。觀察動物的影子方向，選擇正確位置！</p>
       <div class="row"><button class="btn" id="startBtn">開始</button></div>
     </div>
   </div>
@@ -137,7 +161,6 @@
     <div class="panel">
       <h2>太棒了！</h2>
       <p>你完成所有關卡！</p>
-      <!-- 你的慶祝動畫影片 -->
       <video class="cele-video" src="video/good.mp4" autoplay muted playsinline></video>
       <div class="row" style="margin-top:12px">
         <button class="btn" id="playAgainBtn">再玩一次</button>
@@ -149,7 +172,7 @@
   <div class="toast" id="toast"></div>
 
 <script>
-  /* ===== 背景關卡 ===== */
+  /* 背景關卡 */
   const LEVELS = [
     { bg:'light.jpg'   },
     { bg:'tree.png'    },
@@ -157,19 +180,16 @@
   ];
   const BG_BASE = 'images/move-sun/';
 
-  /* ===== 角色尺寸表（maxHeight 基準）===== */
+  /* 角色高度表（你提供） */
   const SIZE_TABLE = [
     {eng:'ant',max:50},{eng:'bear',max:165},{eng:'bird',max:43},{eng:'cat-mother',max:106},
     {eng:'cat',max:87},{eng:'deer',max:136},{eng:'elephant',max:168},{eng:'fox',max:109},
     {eng:'giraffe',max:217},{eng:'lion',max:180},{eng:'rabbit',max:125},{eng:'rhino',max:175},
     {eng:'squirrel',max:57},{eng:'turtle',max:68}
   ];
-  function maxHeightFor(name){
-    const hit = SIZE_TABLE.find(x=>x.eng===name);
-    return hit ? hit.max : 100;
-  }
+  const maxHeightFor = name => (SIZE_TABLE.find(x=>x.eng===name)||{max:140}).max;
 
-  /* ===== DOM ===== */
+  /* DOM */
   const stage = document.getElementById('stage');
   const curtain = document.getElementById('curtain');
   const bgEl = document.getElementById('bg');
@@ -178,7 +198,7 @@
   const hintBox = document.getElementById('hintBox');
   const actorWrap = document.getElementById('actorWrap');
   const actor = document.getElementById('actor');
-  const actorShadow = document.getElementById('actorShadow');
+  const shadowImg = document.getElementById('shadowImg');
 
   const levelEl = document.getElementById('level');
   const winsEl = document.getElementById('wins');
@@ -193,45 +213,91 @@
   const playAgainBtn = document.getElementById('playAgainBtn');
   const goMenuBtn = document.getElementById('goMenuBtn');
 
-  /* ===== 參數：哪隻動物 ===== */
+  /* 參數：哪隻動物 */
   const qs = new URLSearchParams(location.search);
   const sprite = qs.get('sprite');
   const buddy  = qs.get('buddy') || qs.get('animal') || 'cat';
 
-  // 角色圖片與縮放
+  /* 角色 + 影子：依身高表縮放；影子使用相同圖片 */
   (function setActor(){
     let src = sprite ? decodeURIComponent(sprite) : `images/${buddy}/${buddy}.png`;
     actor.src = src;
-    actorShadow.src = src;
-    // 依表縮放寬度：把 giraffe=217 作為 180px 寬基準（其他按比例）
-    const baseMax = 217;
-    const targetW = Math.round(180 * Math.min(1.2, Math.max(0.5, maxHeightFor(buddy)/baseMax)));
-    actorWrap.style.width = targetW + 'px';
+    actor.onerror = ()=>{ actor.src = 'images/cat/cat.png'; shadowImg.src = 'images/cat/cat.png'; };
+    shadowImg.src = src;
+
+    // 以 giraffe=217 為 200px 高基準
+    const REF = 217, BASE_H = 200;
+    let h = Math.round(BASE_H * Math.max(0.24, Math.min(1.0, maxHeightFor(buddy)/REF)));
+    actorWrap.style.setProperty('--h', h + 'px');
+
+    // 影子寬高跟著角色高度（影子是同張圖 → 高度等於角色高度，後續 transform 壓扁）
+    shadowImg.style.height = h + 'px';
+    shadowImg.style.width = 'auto';
   })();
 
-  /* ===== 遊戲狀態 ===== */
+  /* 狀態 */
   const POS_PCTS = [15, 50, 85]; // 左中右吸附點 %
   let level = 1;
   let wins = 0;
-  let targetIndex = 1; // 正確太陽位置索引（0/1/2）
+  let targetIndex = 1;   // 正確太陽位置（0 左 / 1 中 / 2 右）
 
-  function showToast(msg){
+  const showToast = msg => {
     toast.textContent = msg;
     toast.classList.remove('show'); void toast.offsetWidth;
     toast.classList.add('show');
+  };
+
+  /* 影子邏輯（更自然）：
+     - 必須從腳底延伸（transform-origin: bottom）
+     - 太陽在左(0) → 影子往右；中(1) → 影子短且直下；右(2) → 影子往左
+     - 角度、斜率、長度依位置漸變；不同動物高度也影響影子長度 */
+  function applyShadowForSunIndex(idx){
+    // 角色視覺高度（px），用來設定影子長度比例
+    const h = actor.getBoundingClientRect().height || 180;
+
+    // 基礎參數（可以視覺微調）
+    // 側向時（0/2）影子較長、較傾斜；中間時較短、較直
+    const config = [
+      { dir:+1, rot: 8, skew: 12, len: 1.10, offset: 18 }, // 太陽左 → 影子往右
+      { dir: 0, rot: 0,  skew:  0, len: 0.70, offset:  0 }, // 太陽中 → 影子直下
+      { dir:-1, rot:-8, skew:-12, len: 1.10, offset:-18 }  // 太陽右 → 影子往左
+    ][idx];
+
+    // 影子壓扁係數（仰角的簡化）：中間短一些，兩側長一些
+    const scaleY = idx === 1 ? 0.62 : 0.55;
+    // X 向延展（根據角色高），讓較高的動物影子更長一些
+    const scaleX = 1.0 + (h/200)*0.25 * (idx === 1 ? 0.3 : 1.0);
+
+    // 往左右偏移（腳底為中心，往相反光向位移）
+    const pxShift = config.offset + (h/200)*12* (config.dir!==0?config.dir:0);
+
+    // 不同位置透明度微調：中間淡一些，兩側稍濃
+    const opa = idx === 1 ? 0.30 : 0.38;
+
+    shadowImg.style.opacity = opa;
+    // translateX 要放在最前（先偏移），後面加旋轉/傾斜/縮放
+    shadowImg.style.transform =
+      `translateX(calc(-50% + ${pxShift}px)) rotate(${config.rot}deg) skewX(${config.skew}deg) scale(${scaleX}, ${scaleY * config.len})`;
+
+    // 限制影子不超框（大致避免出界）
+    const wrapRect = actorWrap.getBoundingClientRect();
+    const stageRect = stage.getBoundingClientRect();
+    // 如果影子偏移過多，輕微回拉（粗略處理，避免大幅出框）
+    const leftPx = (wrapRect.left + wrapRect.width/2 + pxShift) - stageRect.left;
+    if (leftPx < 30) {
+      // 左邊太靠外，往右拉一點
+      const adj = 30 - leftPx;
+      shadowImg.style.transform =
+        `translateX(calc(-50% + ${pxShift+adj}px)) rotate(${config.rot}deg) skewX(${config.skew}deg) scale(${scaleX}, ${scaleY * config.len})`;
+    } else if (leftPx > stageRect.width - 30) {
+      // 右邊太靠外，往左拉一點
+      const adj = leftPx - (stageRect.width - 30);
+      shadowImg.style.transform =
+        `translateX(calc(-50% + ${pxShift-adj}px)) rotate(${config.rot}deg) skewX(${config.skew}deg) scale(${scaleX}, ${scaleY * config.len})`;
+    }
   }
 
-  /* ===== 影子方向（相反規律）===== */
-  // 依「太陽位置索引」決定影子方向：0→right、1→center、2→left
-  function shadowDirForSunIndex(sunIndex){
-    return sunIndex === 0 ? 'right' : (sunIndex === 2 ? 'left' : 'center');
-  }
-  function setShadowDirClass(dir){ // 'left'|'center'|'right'
-    actorWrap.classList.remove('dir-left','dir-center','dir-right');
-    actorWrap.classList.add(`dir-${dir}`);
-  }
-
-  /* ===== 薄幕 ===== */
+  /* 薄幕 */
   function withCurtain(task){
     curtain.classList.add('show');
     setTimeout(()=> {
@@ -241,10 +307,9 @@
     }, 60);
   }
 
-  /* ===== 拖曳太陽（限制水平 + 吸附三點）===== */
-  function railRect(){ return rail.getBoundingClientRect(); }
-  function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
-
+  /* 拖曳 + 吸附 */
+  const railRect = () => rail.getBoundingClientRect();
+  const clamp = (v,min,max)=> Math.max(min, Math.min(max, v));
   function setSunByClientX(clientX){
     const rr = railRect();
     const x = clamp(clientX - rr.left, 0, rr.width);
@@ -286,24 +351,27 @@
   }
   makeSunDraggable();
 
-  /* ===== 關卡 ===== */
+  /* 允許直接點擺放位置（snap圈）來放太陽 */
+  document.querySelectorAll('.snap').forEach(dot=>{
+    dot.addEventListener('click',()=>{
+      const idx = Number(dot.dataset.idx);
+      sunEl.style.left = POS_PCTS[idx] + '%';
+      checkWin(idx);
+    });
+  });
+
+  /* 關卡 */
   function buildLevel(){
     withCurtain(()=>{
       wins = 0; winsEl.textContent = '0';
       levelEl.textContent = String(level);
 
-      // 背景
       const spec = LEVELS[level-1];
       bgEl.style.backgroundImage = `url(${BG_BASE}${spec.bg})`;
 
-      // 隨機正解：0/1/2
       targetIndex = Math.floor(Math.random()*3);
 
-      // 依正解設定影子方向（相反規律）
-      const dir = shadowDirForSunIndex(targetIndex);
-      setShadowDirClass(dir);
-
-      // 初始太陽在中間，稍後淡入
+      // 初始太陽在中間（兩幀後顯示，避免閃現）
       sunEl.classList.add('cloak');
       sunEl.style.left = POS_PCTS[1] + '%';
       requestAnimationFrame(()=>requestAnimationFrame(()=>{
@@ -311,7 +379,9 @@
         sunEl.style.opacity = 1;
       }));
 
-      // 隱藏提示框
+      // 依正解套影子（和太陽相反）
+      applyShadowForSunIndex(targetIndex);
+
       hintBox.style.display = 'none';
     });
   }
@@ -330,21 +400,20 @@
     level++;
     if (level > LEVELS.length){
       endOverlay.classList.remove('ghost');
-      // 讓影片自動跑一次即可（已 autoplay, muted, playsinline）
     }else{
       buildLevel();
     }
   }
 
-  /* ===== 提示：在正確太陽位置顯示虛線框 1.2 秒 ===== */
+  /* 提示：正確位置的虛線框 1.2 秒 */
   function showHint(){
     hintBox.style.left = POS_PCTS[targetIndex] + '%';
     hintBox.style.display = 'block';
-    hintBox.style.animation = 'none'; void hintBox.offsetWidth; hintBox.style.animation = ''; // 重新觸發動畫
+    hintBox.style.animation = 'none'; void hintBox.offsetWidth; hintBox.style.animation = '';
     setTimeout(()=> hintBox.style.display = 'none', 1200);
   }
 
-  /* ===== 導航 ===== */
+  /* 導航（攜帶 buddy/sprite） */
   function carryParams(url){
     const q = new URLSearchParams();
     if (buddy)  q.set('buddy', buddy);
@@ -360,7 +429,7 @@
     }
   }
 
-  /* ===== 事件 ===== */
+  /* 事件 */
   hintBtn.addEventListener('click', showHint);
   resetBtn.addEventListener('click', buildLevel);
   menuBtn.addEventListener('click', goMenu);
@@ -368,7 +437,7 @@
   playAgainBtn.addEventListener('click', ()=>{ endOverlay.classList.add('ghost'); level=1; buildLevel(); });
   goMenuBtn.addEventListener('click', goMenu);
 
-  /* 告知 app-shell：這頁使用 calm 曲子（避免與其他頁同時播放） */
+  /* 告知 app-shell：這頁用 calm 曲子 */
   try{ if (parent && parent !== window){ parent.postMessage({type:'setTrack', track:'calm'}, '*'); } }catch(e){}
 </script>
 </body>

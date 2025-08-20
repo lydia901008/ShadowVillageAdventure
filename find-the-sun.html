@@ -49,11 +49,10 @@
   .sun.glow{
     box-shadow:0 0 10px rgba(243,156,18,.7), 0 0 20px rgba(243,156,18,.5), 0 0 36px rgba(243,156,18,.35);
   }
-  /* 重佈局時完全隱蔽（雙保險） */
   .sun.cloak{ opacity:0 !important; transition:none !important; }
   .sun.hidden{ visibility:hidden; pointer-events:none; }
 
-  /* 雲（純 CSS，可拖移；乾淨藍灰雙色漸層） */
+  /* 雲（可拖移） */
   .cover{ position:absolute; transform:translate(-50%, -50%); cursor:grab; z-index:2; }
   .cover.dragging{ cursor:grabbing }
   .cloud{
@@ -75,7 +74,11 @@
   .cloud.c3::after { width:52px; height:52px; right:16px; top:-18px; }
 
   /* 左下角夥伴（由上一頁帶入） */
-  .buddy{ position:absolute; left:14px; bottom:14px; width:90px; height:auto; transform-origin:bottom left; display:none }
+  .buddy{
+    position:absolute; left:14px; bottom:14px;
+    height:auto; width:auto; max-width:28vw; /* 防呆：極小螢幕避免溢出 */
+    transform-origin:bottom left; display:none
+  }
   .buddy.bounce{ animation:buddyBounce .5s ease }
   @keyframes buddyBounce{ 0%{ transform:translateY(0) } 40%{ transform:translateY(-14px) } 100%{ transform:translateY(0) } }
   .buddy-tray{ display:none !important; }
@@ -93,7 +96,7 @@
   .flash{ position:absolute; inset:0; background:rgba(255,255,200,.65); animation:flash .45s ease; pointer-events:none }
   @keyframes flash{ from{ opacity:.9 } to{ opacity:0 } }
 
-  @media (max-width:620px){ .sun{width:70px; height:70px} .buddy{width:72px} }
+  @media (max-width:620px){ .sun{width:70px; height:70px} /* buddy 高度改由 JS 控制 */ }
 </style>
 </head>
 <body>
@@ -141,6 +144,7 @@
   </div>
 
 <script>
+/* ========= 1) 關卡設定（原樣） ========= */
 const LEVELS = [
   { covers: 4, bg: 'lakeside',      cloudTop:'#b9c7d3', cloudBottom:'#9fafbe', shadow:'0 10px 20px rgba(0,0,0,.26)' },
   { covers: 6, bg: 'night-village', cloudTop:'#a3b1c1', cloudBottom:'#8ea0b4', shadow:'0 12px 22px rgba(0,0,0,.30)' },
@@ -148,6 +152,7 @@ const LEVELS = [
 ];
 const BG_BASE = 'images/backgrounds/';
 
+/* ========= 2) DOM 變數 ========= */
 const stage = document.getElementById('stage');
 const bgEl = document.getElementById('bg');
 const sunEl = document.getElementById('sun');
@@ -166,18 +171,55 @@ const goMenuBtn = document.getElementById('goMenuBtn');
 const nextGameBtn = document.getElementById('nextGameBtn');
 const curtain = document.getElementById('curtain');
 
+/* ========= 3) 讀參數 & 設定角色 ========= */
 const urlParams = new URLSearchParams(location.search);
 const spriteParam = urlParams.get('sprite');
 const buddyParam  = urlParams.get('buddy') || urlParams.get('animal');
 
+/* 你提供的「最大高度表」 */
+const HEIGHTS = {
+  ant:50, bear:165, bird:43, 'cat-mother':106, cat:87, deer:136,
+  elephant:168, fox:109, giraffe:217, lion:180, rabbit:125,
+  rhino:175, squirrel:57, turtle:68
+};
+const BASE_MAX = HEIGHTS['giraffe']; // 217，當作比例基準
+
+function detectAnimalKey(){
+  if (buddyParam) return buddyParam;
+  if (spriteParam){
+    const m = decodeURIComponent(spriteParam).match(/images\/([^\/]+)\//);
+    if (m) return m[1];
+  }
+  return 'cat';
+}
+
 (function initBuddy(){
+  const key = detectAnimalKey();
   let src = null;
   if (spriteParam) src = decodeURIComponent(spriteParam);
   else if (buddyParam) src = `images/${buddyParam}/${buddyParam}.png`;
   if (src){ buddyEl.src = src; buddyEl.style.display = 'block'; }
   const tray = document.getElementById('buddyTray'); if (tray) tray.style.display = 'none';
+
+  function applyBuddySize(){
+    const isPhone = window.innerWidth <= 640;
+    const MAX_H = isPhone ? 140 : 180;  // 顯示上限（桌機較大、手機較小）
+    const MIN_H = isPhone ? 48  : 60;   // 顯示下限
+
+    const base = HEIGHTS[key] ?? 120;
+    // 等比縮放：以 217 為 100%，映到 MAX_H；再夾在 [MIN_H, MAX_H]
+    const scaled = (base / BASE_MAX) * MAX_H;
+    const finalH = Math.max(MIN_H, Math.min(MAX_H, Math.round(scaled)));
+
+    buddyEl.style.height = finalH + 'px';
+    buddyEl.style.width = 'auto';
+  }
+
+  applyBuddySize();
+  window.addEventListener('resize', applyBuddySize);
 })();
 
+/* ========= 4) 遊戲流程（原樣） ========= */
 let level = 1;
 let catches = 0;
 let sunClickable = false;
@@ -207,10 +249,8 @@ function ensureRevealIfUncovered(){
 /* 小薄幕輔助：顯示／隱藏 */
 function withCurtain(fn){
   curtain.classList.add('show');
-  // 等薄幕蓋上去一點點（避免一瞬間露出）
   setTimeout(async ()=>{
     try{ await fn(); } finally{
-      // 讓畫面先完成 2 幀，再拉開薄幕
       requestAnimationFrame(()=>requestAnimationFrame(()=>{
         curtain.classList.remove('show');
       }));
@@ -221,7 +261,7 @@ function withCurtain(fn){
 function clearStage(){
   Array.from(stage.querySelectorAll('.cover')).forEach(el=>el.remove());
   catches = 0; catchesEl.textContent = '0';
-  sunEl.classList.add('cloak','hidden');      // 完全隱身
+  sunEl.classList.add('cloak','hidden');
   sunEl.style.opacity = 0; sunEl.classList.remove('glow');
   sunClickable = false;
 }
@@ -282,29 +322,24 @@ function addCloud(){
 }
 
 function relocateSunAndClouds(){
-  // 1) 完全隱藏太陽
   sunEl.classList.add('cloak','hidden');
   sunEl.style.opacity = 0; sunEl.classList.remove('glow'); sunClickable = false;
 
-  // 2) 清雲、重新放太陽
   Array.from(stage.querySelectorAll('.cover')).forEach(el=>el.remove());
   layoutSun();
   const spec = LEVELS[Math.min(level-1, LEVELS.length-1)];
 
-  // 3) 放一朵「必定覆蓋」太陽的雲（靠太陽 ±4%）——保證覆蓋
+  // 必定覆蓋太陽的一朵雲（靠太陽 ±4%）
   const near = addCloud();
   const sx = sunEl.offsetLeft / stage.clientWidth * 100;
   const sy = sunEl.offsetTop  / stage.clientHeight * 100;
   near.style.left = (sx + rand(-4,4)) + '%';
   near.style.top  = (sy + rand(-4,4)) + '%';
 
-  // 4) 其他雲
   for(let i=1;i<spec.covers;i++){ addCloud(); }
 
-  // 5) 等兩幀 → 解除 cloak，但維持 hidden；先判斷是否被覆蓋，再顯示
   requestAnimationFrame(()=>requestAnimationFrame(()=>{
     sunEl.classList.remove('cloak');
-    // 判斷覆蓋狀態後再顯示（若已被蓋住，顯示也不會被看到）
     sunEl.classList.remove('hidden');
     ensureRevealIfUncovered();
   }));
@@ -343,6 +378,7 @@ function nextLevel(){
   else { buildLevel(); }
 }
 
+/* ========= 5) 導航（原樣） ========= */
 function carryParams(url){
   const q = new URLSearchParams();
   if (buddyParam)  q.set('buddy', buddyParam);
@@ -366,34 +402,20 @@ function goNextGame(){
   }
 }
 
-hintBtn.addEventListener('click', ()=>{
-  if(hintUsedThisLevel){ showToast('本關提示已用過！'); return; }
-  hintUsedThisLevel = true;
-  sunEl.classList.add('glow'); sunEl.style.opacity = 1;
-  stage.querySelectorAll('.cover').forEach((c,i)=>{
-    c.animate(
-      [{transform:c.style.transform+' translateY(0px)'},{transform:c.style.transform+' translateY(-6px)'},{transform:c.style.transform+' translateY(0px)'}],
-      {duration:350+60*i, easing:'ease-out'}
-    );
-  });
-  setTimeout(()=>{ if(!sunClickable){ sunEl.style.opacity = 0; sunEl.classList.remove('glow'); } }, 700);
-});
-
-function startGame(){ startOverlay.classList.add('ghost'); level = 1; catches = 0; buildLevel(); }
+/* ========= 6) 事件 ========= */
+startGameBtn.addEventListener('click', ()=>{ startOverlay.classList.add('ghost'); level = 1; catches = 0; buildLevel(); });
+resetBtn.addEventListener('click', ()=>{ startOverlay.classList.add('ghost'); level = 1; catches = 0; buildLevel(); });
+backBtn.addEventListener('click', goMenu);
+stage.addEventListener('click', handleStageClick);
+playAgainBtn.addEventListener('click', ()=>{ endOverlay.classList.add('ghost'); startGameBtn.click(); });
+goMenuBtn.addEventListener('click', goMenu);
+nextGameBtn.addEventListener('click', goNextGame);
 
 function playFoundFeedback(){
   const fx = document.createElement('div'); fx.className='flash'; stage.appendChild(fx);
   fx.addEventListener('animationend', ()=> fx.remove());
   try{ new Audio('sounds/found.mp3').play().catch(()=>{}); }catch(e){}
 }
-
-startGameBtn.addEventListener('click', startGame);
-resetBtn.addEventListener('click', startGame);
-backBtn.addEventListener('click', goMenu);
-stage.addEventListener('click', handleStageClick);
-playAgainBtn.addEventListener('click', ()=>{ endOverlay.classList.add('ghost'); startGame(); });
-goMenuBtn.addEventListener('click', goMenu);
-nextGameBtn.addEventListener('click', goNextGame);
 
 /* 告知 app-shell：這頁使用主題曲 */
 try{ if (window.parent && window.parent !== window){ parent.postMessage({type:'setTrack', track:'main'}, '*'); } }catch(e){}
