@@ -419,22 +419,54 @@ goMenuBtn.addEventListener('click', goMenu);
 nextGameBtn.addEventListener('click', goNextGame);
 
 /* ====== 提示：太陽位置亮起虛線圈（整合好） ====== */
+/* ====== 提示：在太陽正上方畫一個虛線圈（inline style，避開快取問題） ====== */
 let hintEl = null;
 function showHint(){
-  if (!sunEl) return;
+  if (!sunEl || !stage) return;
+
+  // 取得太陽中心點（相對舞台座標）
+  const s = sunEl.getBoundingClientRect();
+  const g = stage.getBoundingClientRect();
+  const cx = s.left + s.width/2 - g.left;
+  const cy = s.top  + s.height/2 - g.top;
+
+  // 建立或重用提示圈
   if (!hintEl){
     hintEl = document.createElement('div');
-    hintEl.className = 'hint-ring';
     stage.appendChild(hintEl);
   }
-  // 用目前太陽的 left/top（百分比），圈在太陽正上方且顯示在雲上層
-  hintEl.style.left = sunEl.style.left || '50%';
-  hintEl.style.top  = sunEl.style.top  || '40%';
-  hintEl.style.display = 'block';
 
-  // 1.2 秒後自動隱藏
-  setTimeout(()=>{ if(hintEl) hintEl.style.display = 'none'; }, 1000);
+  // 直接寫樣式（不靠 .hint-ring/.show）
+  const pad = 18; // 圈圈比太陽大一點
+  const ringW = Math.max(80, s.width + pad*2);
+  const ringH = Math.max(80, s.height + pad*2);
+  Object.assign(hintEl.style, {
+    position: 'absolute',
+    left: cx + 'px',
+    top:  cy + 'px',
+    width:  ringW + 'px',
+    height: ringH + 'px',
+    transform: 'translate(-50%,-50%)',
+    borderRadius: '50%',
+    border: '3px dashed rgba(255,200,0,.95)',
+    outline: '2px solid rgba(255,200,0,.15)',
+    background: 'transparent',
+    pointerEvents: 'none',
+    zIndex:  '4',      // 雲是 z=2，確保在雲上面
+    opacity: '0',
+    transition: 'opacity 120ms ease'
+  });
+
+  // 先顯示
+  requestAnimationFrame(()=>{
+    hintEl.style.opacity = '1';
+    // 1秒後淡出
+    setTimeout(()=>{
+      hintEl.style.opacity = '0';
+    }, 1000);
+  });
 }
+
 hintBtn.addEventListener('click', showHint);
 
 function playFoundFeedback(){
